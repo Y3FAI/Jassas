@@ -2,10 +2,10 @@
 
 > Last updated: 2025-12-30
 
-## Overall Progress: 40%
+## Overall Progress: 65%
 
 ```
-[████████░░░░░░░░░░░░] 40%
+[█████████████░░░░░░░] 65%
 ```
 
 ---
@@ -16,8 +16,8 @@
 | --------- | -------- | -------------- |
 | Database  | 90%      | ✅ Ready       |
 | Crawler   | 100%     | ✅ Ready       |
-| Cleaner   | 0%       | ⬜ Not started |
-| Tokenizer | 0%       | ⬜ Not started |
+| Cleaner   | 100%     | ✅ Ready       |
+| Tokenizer | 100%     | ✅ Ready       |
 | Ranker    | 0%       | ⬜ Not started |
 | API       | 0%       | ⬜ Not started |
 | Manager   | 80%      | 🔨 In progress |
@@ -43,17 +43,20 @@
 -   [x] Rate limiting
 -   [x] Content deduplication (hash)
 
-### Cleaner (0%)
+### Cleaner (100%)
 
--   [ ] parser.py
--   [ ] HTML stripping
--   [ ] Text normalization
+-   [x] parser.py (HTML → text)
+-   [x] HTML stripping (noise tags)
+-   [x] Text normalization (NFKC)
+-   [x] Arabic normalization (tashkeel, alif, teh marbuta, yeh)
+-   [x] cleaner.py (batch orchestrator)
 
-### Tokenizer (0%)
+### Tokenizer (100%)
 
--   [ ] bm25.py (stemming, stopwords)
--   [ ] vector.py (embeddings)
--   [ ] USearch integration
+-   [x] bm25.py (Arabic/English stopwords, term frequencies)
+-   [x] vector.py (paraphrase-multilingual-MiniLM-L12-v2)
+-   [x] USearch integration (f16, connectivity=32, HNSW tuned)
+-   [x] tokenizer.py (batch orchestrator)
 
 ### Ranker (0%)
 

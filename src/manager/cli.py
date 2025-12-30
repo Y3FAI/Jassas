@@ -150,31 +150,48 @@ def crawl(
 
 
 @app.command()
-def clean():
-    """Run the cleaner (placeholder)."""
-    console.print(Panel(
-        "[yellow]Cleaner not implemented yet.[/yellow]\n\n"
-        "This will:\n"
-        "1. Get uncleaned raw pages\n"
-        "2. Strip HTML tags\n"
-        "3. Normalize text\n"
-        "4. Save to documents",
-        title="Cleaner"
-    ))
+def clean(
+    batch_size: int = typer.Option(10, "--batch", "-b", help="Batch size for processing"),
+):
+    """Run the cleaner to process raw pages."""
+    if not db_exists():
+        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
+        raise typer.Exit(1)
+
+    # Check if there are raw pages
+    with get_db() as conn:
+        cursor = conn.execute("SELECT COUNT(*) FROM raw_pages")
+        if cursor.fetchone()[0] == 0:
+            console.print("[yellow]No raw pages found. Run 'jassas crawl' first.[/yellow]")
+            raise typer.Exit(1)
+
+    from cleaner import start
+    start(batch_size=batch_size)
 
 
 @app.command()
-def tokenize():
-    """Run the tokenizer (placeholder)."""
-    console.print(Panel(
-        "[yellow]Tokenizer not implemented yet.[/yellow]\n\n"
-        "This will:\n"
-        "1. Get pending documents\n"
-        "2. Build BM25 inverted index\n"
-        "3. Generate vector embeddings\n"
-        "4. Save to vocab, inverted_index, and .usearch",
-        title="Tokenizer"
-    ))
+def tokenize(
+    batch_size: int = typer.Option(32, "--batch", "-b", help="Batch size for processing"),
+):
+    """Run the tokenizer to build search indexes."""
+    if not db_exists():
+        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
+        raise typer.Exit(1)
+
+    # Check if there are documents
+    doc_count = Documents.get_total_count()
+    if doc_count == 0:
+        console.print("[yellow]No documents found. Run 'jassas clean' first.[/yellow]")
+        raise typer.Exit(1)
+
+    # Check for pending documents
+    pending = Documents.get_pending(limit=1)
+    if not pending:
+        console.print("[yellow]No pending documents to tokenize.[/yellow]")
+        return
+
+    from tokenizer import start
+    start(batch_size=batch_size)
 
 
 @app.command()
