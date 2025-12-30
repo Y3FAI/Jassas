@@ -2,10 +2,10 @@
 
 > Last updated: 2025-12-30
 
-## Overall Progress: 15%
+## Overall Progress: 25%
 
 ```
-[███░░░░░░░░░░░░░░░░░] 15%
+[█████░░░░░░░░░░░░░░░] 25%
 ```
 
 ---
@@ -20,7 +20,7 @@
 | Tokenizer | 0%       | ⬜ Not started |
 | Ranker    | 0%       | ⬜ Not started |
 | API       | 0%       | ⬜ Not started |
-| Manager   | 0%       | ⬜ Not started |
+| Manager   | 70%      | 🔨 In progress |
 
 ---
 
@@ -65,11 +65,18 @@
 -   [ ] Search endpoint
 -   [ ] Health endpoint
 
-### Manager (0%)
+### Manager (70%)
 
--   [ ] cli.py
--   [ ] Service control
--   [ ] Stats display
+-   [x] cli.py (typer + rich)
+-   [x] init command
+-   [x] seed command
+-   [x] stats command
+-   [x] frontier command
+-   [x] reset command
+-   [ ] crawl command (placeholder)
+-   [ ] clean command (placeholder)
+-   [ ] tokenize command (placeholder)
+-   [ ] search command (placeholder)
 
 ---
 

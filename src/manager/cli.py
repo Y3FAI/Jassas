@@ -1,0 +1,215 @@
+"""
+Jassas Manager CLI - Control center for all services.
+"""
+import sys
+import os
+
+# Add src to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import typer
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich import box
+
+from db import init_db, db_exists, Frontier, RawPages, Documents, Vocab, InvertedIndex
+from db.connection import get_db
+
+app = typer.Typer(
+    name="jassas",
+    help="Jassas Search Engine - Manager CLI",
+    add_completion=False
+)
+console = Console()
+
+
+@app.command()
+def init():
+    """Initialize the database."""
+    if db_exists():
+        console.print("[yellow]Database already exists.[/yellow]")
+        if not typer.confirm("Reinitialize?"):
+            raise typer.Abort()
+
+    init_db()
+    console.print("[green]Database initialized successfully.[/green]")
+
+
+@app.command()
+def seed(url: str = typer.Argument(..., help="Starting URL to crawl")):
+    """Add a seed URL to the frontier."""
+    if not db_exists():
+        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
+        raise typer.Exit(1)
+
+    added = Frontier.add_url(url, depth=0)
+    if added:
+        console.print(f"[green]Added seed URL:[/green] {url}")
+    else:
+        console.print(f"[yellow]URL already exists:[/yellow] {url}")
+
+
+@app.command()
+def stats():
+    """Show database statistics."""
+    if not db_exists():
+        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
+        raise typer.Exit(1)
+
+    # Frontier stats
+    frontier_stats = Frontier.get_stats()
+    total_urls = sum(frontier_stats.values())
+
+    # Document stats
+    doc_count = Documents.get_total_count()
+    avg_doc_len = Documents.get_avg_doc_len()
+
+    # Vocab stats
+    with get_db() as conn:
+        cursor = conn.execute("SELECT COUNT(*) FROM vocab")
+        vocab_count = cursor.fetchone()[0]
+
+        cursor = conn.execute("SELECT COUNT(*) FROM inverted_index")
+        index_count = cursor.fetchone()[0]
+
+        cursor = conn.execute("SELECT COUNT(*) FROM raw_pages")
+        pages_count = cursor.fetchone()[0]
+
+    # Build table
+    table = Table(title="Jassas Statistics", box=box.ROUNDED)
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="green", justify="right")
+
+    # Frontier section
+    table.add_row("─── Frontier ───", "")
+    table.add_row("Total URLs", str(total_urls))
+    for status, count in frontier_stats.items():
+        table.add_row(f"  {status}", str(count))
+
+    # Crawler section
+    table.add_row("─── Crawler ───", "")
+    table.add_row("Raw Pages", str(pages_count))
+
+    # Cleaner section
+    table.add_row("─── Cleaner ───", "")
+    table.add_row("Documents", str(doc_count))
+    table.add_row("Avg Doc Length", f"{avg_doc_len:.1f}")
+
+    # Tokenizer section
+    table.add_row("─── Tokenizer ───", "")
+    table.add_row("Vocabulary Size", str(vocab_count))
+    table.add_row("Index Entries", str(index_count))
+
+    console.print(table)
+
+
+@app.command()
+def frontier(limit: int = typer.Option(10, help="Number of URLs to show")):
+    """Show pending URLs in the frontier."""
+    if not db_exists():
+        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
+        raise typer.Exit(1)
+
+    pending = Frontier.get_next_pending(limit=limit)
+
+    if not pending:
+        console.print("[yellow]No pending URLs in frontier.[/yellow]")
+        return
+
+    table = Table(title=f"Frontier (Top {limit} Pending)", box=box.ROUNDED)
+    table.add_column("ID", style="dim")
+    table.add_column("Depth", justify="center")
+    table.add_column("URL", style="cyan")
+
+    for row in pending:
+        table.add_row(str(row['id']), str(row['depth']), row['url'])
+
+    console.print(table)
+
+
+@app.command()
+def crawl():
+    """Run the crawler (placeholder)."""
+    console.print(Panel(
+        "[yellow]Crawler not implemented yet.[/yellow]\n\n"
+        "This will:\n"
+        "1. Fetch pending URLs from frontier\n"
+        "2. Download HTML content\n"
+        "3. Extract new URLs\n"
+        "4. Save to raw_pages",
+        title="Crawler"
+    ))
+
+
+@app.command()
+def clean():
+    """Run the cleaner (placeholder)."""
+    console.print(Panel(
+        "[yellow]Cleaner not implemented yet.[/yellow]\n\n"
+        "This will:\n"
+        "1. Get uncleaned raw pages\n"
+        "2. Strip HTML tags\n"
+        "3. Normalize text\n"
+        "4. Save to documents",
+        title="Cleaner"
+    ))
+
+
+@app.command()
+def tokenize():
+    """Run the tokenizer (placeholder)."""
+    console.print(Panel(
+        "[yellow]Tokenizer not implemented yet.[/yellow]\n\n"
+        "This will:\n"
+        "1. Get pending documents\n"
+        "2. Build BM25 inverted index\n"
+        "3. Generate vector embeddings\n"
+        "4. Save to vocab, inverted_index, and .usearch",
+        title="Tokenizer"
+    ))
+
+
+@app.command()
+def search(query: str = typer.Argument(..., help="Search query")):
+    """Search the index (placeholder)."""
+    console.print(Panel(
+        f"[yellow]Search not implemented yet.[/yellow]\n\n"
+        f"Query: [cyan]{query}[/cyan]\n\n"
+        "This will:\n"
+        "1. Tokenize query\n"
+        "2. Search BM25 index\n"
+        "3. Search vector index\n"
+        "4. Merge with RRF\n"
+        "5. Return ranked results",
+        title="Search"
+    ))
+
+
+@app.command()
+def reset(force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation")):
+    """Reset the database (delete all data)."""
+    if not db_exists():
+        console.print("[yellow]Database not found.[/yellow]")
+        return
+
+    if not force:
+        console.print("[red]This will delete ALL data![/red]")
+        if not typer.confirm("Are you sure?"):
+            raise typer.Abort()
+
+    from db.init_db import DB_PATH
+    os.remove(DB_PATH)
+    console.print("[green]Database deleted.[/green]")
+
+    init_db()
+    console.print("[green]Database reinitialized.[/green]")
+
+
+def main():
+    """Entry point."""
+    app()
+
+
+if __name__ == "__main__":
+    main()
