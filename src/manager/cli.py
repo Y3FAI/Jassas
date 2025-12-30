@@ -129,17 +129,24 @@ def frontier(limit: int = typer.Option(10, help="Number of URLs to show")):
 
 
 @app.command()
-def crawl():
-    """Run the crawler (placeholder)."""
-    console.print(Panel(
-        "[yellow]Crawler not implemented yet.[/yellow]\n\n"
-        "This will:\n"
-        "1. Fetch pending URLs from frontier\n"
-        "2. Download HTML content\n"
-        "3. Extract new URLs\n"
-        "4. Save to raw_pages",
-        title="Crawler"
-    ))
+def crawl(
+    max_pages: int = typer.Option(100, "--max-pages", "-n", help="Maximum pages to crawl"),
+    max_depth: int = typer.Option(5, "--max-depth", "-d", help="Maximum BFS depth"),
+    delay: float = typer.Option(2.0, "--delay", "-t", help="Delay between requests (seconds)"),
+):
+    """Run the crawler."""
+    if not db_exists():
+        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
+        raise typer.Exit(1)
+
+    # Check if frontier has URLs
+    pending = Frontier.get_next_pending(limit=1)
+    if not pending:
+        console.print("[yellow]No URLs in frontier. Run 'jassas seed <url>' first.[/yellow]")
+        raise typer.Exit(1)
+
+    from crawler import start
+    start(max_pages=max_pages, max_depth=max_depth, delay=delay)
 
 
 @app.command()

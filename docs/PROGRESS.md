@@ -2,10 +2,10 @@
 
 > Last updated: 2025-12-30
 
-## Overall Progress: 25%
+## Overall Progress: 40%
 
 ```
-[█████░░░░░░░░░░░░░░░] 25%
+[████████░░░░░░░░░░░░] 40%
 ```
 
 ---
@@ -15,12 +15,12 @@
 | System    | Progress | Status         |
 | --------- | -------- | -------------- |
 | Database  | 90%      | ✅ Ready       |
-| Crawler   | 0%       | ⬜ Not started |
+| Crawler   | 100%     | ✅ Ready       |
 | Cleaner   | 0%       | ⬜ Not started |
 | Tokenizer | 0%       | ⬜ Not started |
 | Ranker    | 0%       | ⬜ Not started |
 | API       | 0%       | ⬜ Not started |
-| Manager   | 70%      | 🔨 In progress |
+| Manager   | 80%      | 🔨 In progress |
 
 ---
 
@@ -34,12 +34,14 @@
 -   [x] models.py (CRUD)
 -   [ ] Migration utilities
 
-### Crawler (0%)
+### Crawler (100%)
 
--   [ ] fetcher.py
--   [ ] extractor.py
--   [ ] robots.txt handling
--   [ ] Rate limiting
+-   [x] spider.py (orchestrator)
+-   [x] fetcher.py (CloudFlare bypass)
+-   [x] extractor.py (URL filtering)
+-   [x] robots.txt handling
+-   [x] Rate limiting
+-   [x] Content deduplication (hash)
 
 ### Cleaner (0%)
 
@@ -65,7 +67,7 @@
 -   [ ] Search endpoint
 -   [ ] Health endpoint
 
-### Manager (70%)
+### Manager (80%)
 
 -   [x] cli.py (typer + rich)
 -   [x] init command
@@ -73,7 +75,7 @@
 -   [x] stats command
 -   [x] frontier command
 -   [x] reset command
--   [ ] crawl command (placeholder)
+-   [x] crawl command
 -   [ ] clean command (placeholder)
 -   [ ] tokenize command (placeholder)
 -   [ ] search command (placeholder)
