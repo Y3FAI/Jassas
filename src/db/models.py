@@ -8,31 +8,40 @@ from .connection import get_db
 
 
 class Frontier:
-    """URL queue operations for Crawler."""
+    """URL queue operations for Crawler with priority support."""
 
     @staticmethod
-    def add_url(url: str, depth: int = 0) -> bool:
-        """Add URL to frontier. Returns False if already exists."""
+    def add_url(url: str, depth: int = 0, priority: int = 0) -> bool:
+        """Add URL to frontier with priority. Returns False if already exists."""
         with get_db() as conn:
             try:
                 conn.execute(
-                    "INSERT INTO frontier (url, depth) VALUES (?, ?)",
-                    (url, depth)
+                    "INSERT INTO frontier (url, depth, priority) VALUES (?, ?, ?)",
+                    (url, depth, priority)
                 )
                 return True
             except Exception:
                 return False
 
     @staticmethod
-    def add_urls(urls: List[Tuple[str, int]]) -> int:
-        """Bulk add URLs. Returns count of newly added."""
+    def add_urls(urls: List[Tuple[str, int, int]]) -> int:
+        """
+        Bulk add URLs with priority. Returns count of newly added.
+        Each tuple: (url, depth, priority)
+        """
         added = 0
         with get_db() as conn:
-            for url, depth in urls:
+            for item in urls:
                 try:
+                    if len(item) == 3:
+                        url, depth, priority = item
+                    else:
+                        # Backward compatibility: (url, depth)
+                        url, depth = item
+                        priority = 0
                     conn.execute(
-                        "INSERT INTO frontier (url, depth) VALUES (?, ?)",
-                        (url, depth)
+                        "INSERT INTO frontier (url, depth, priority) VALUES (?, ?, ?)",
+                        (url, depth, priority)
                     )
                     added += 1
                 except Exception:
@@ -41,12 +50,12 @@ class Frontier:
 
     @staticmethod
     def get_next_pending(limit: int = 1) -> List[dict]:
-        """Get next pending URLs (BFS order by depth)."""
+        """Get next pending URLs ordered by priority (desc), then depth (asc)."""
         with get_db() as conn:
             cursor = conn.execute(
-                """SELECT id, url, depth FROM frontier
+                """SELECT id, url, depth, priority FROM frontier
                    WHERE status = 'pending'
-                   ORDER BY depth, id
+                   ORDER BY priority DESC, depth ASC, id ASC
                    LIMIT ?""",
                 (limit,)
             )

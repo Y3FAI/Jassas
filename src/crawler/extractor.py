@@ -1,14 +1,16 @@
 """
 Extractor - Extract and filter URLs from HTML.
+With URL priority scoring and Arabic preference.
 """
-from typing import List, Set
+from typing import List, Set, Tuple
 from urllib.parse import urljoin, urlparse
+import re
 
 from bs4 import BeautifulSoup
 
 
 class Extractor:
-    """Extracts valid URLs from HTML content."""
+    """Extracts valid URLs from HTML content with priority scoring."""
 
     # File extensions to skip
     SKIP_EXTENSIONS = {
@@ -32,16 +34,30 @@ class Extractor:
         'www.my.gov.sa',
     }
 
-    def extract(self, html: str, base_url: str) -> List[str]:
+    # Priority patterns (higher score = crawl first)
+    PRIORITY_RULES = [
+        # High priority - service pages
+        (r'/services/', 50),
+        (r'/service/', 50),
+        (r'/الخدمات/', 50),
+        (r'/خدمة/', 50),
+        # Category/listing pages
+        (r'/categories/', 20),
+        (r'/الفئات/', 20),
+        # Deep paths - slightly lower
+        (r'/[^/]+/[^/]+/[^/]+/[^/]+/', -10),
+    ]
+
+    def extract(self, html: str, base_url: str) -> List[Tuple[str, int]]:
         """
-        Extract valid URLs from HTML.
+        Extract valid URLs from HTML with priority scores.
 
         Args:
             html: HTML content
             base_url: URL of the page (for resolving relative links)
 
         Returns:
-            List of valid, absolute URLs
+            List of tuples: (url, priority)
         """
         soup = BeautifulSoup(html, 'lxml')
         urls: Set[str] = set()
@@ -58,9 +74,33 @@ class Extractor:
             # Validate and clean
             cleaned = self._clean_url(absolute_url)
             if cleaned and self._is_valid(cleaned):
-                urls.add(cleaned)
+                # Try Arabic version if this is English
+                arabic_url = self._try_arabic_version(cleaned)
+                if arabic_url:
+                    urls.add(arabic_url)
+                else:
+                    urls.add(cleaned)
 
-        return list(urls)
+        # Return with priorities
+        return [(url, self._calculate_priority(url)) for url in urls]
+
+    def _try_arabic_version(self, url: str) -> str:
+        """
+        If URL contains /en/, return /ar/ version.
+        Caller should verify it exists before using.
+        """
+        if '/en/' in url or url.endswith('/en'):
+            arabic_url = url.replace('/en/', '/ar/').replace('/en', '/ar')
+            return arabic_url
+        return None
+
+    def _calculate_priority(self, url: str) -> int:
+        """Calculate priority score for URL based on patterns."""
+        priority = 0
+        for pattern, score in self.PRIORITY_RULES:
+            if re.search(pattern, url):
+                priority += score
+        return priority
 
     def _clean_url(self, url: str) -> str:
         """Clean and normalize URL."""

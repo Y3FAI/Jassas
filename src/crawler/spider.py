@@ -68,6 +68,7 @@ class Spider:
             url_record = pending[0]
             url = url_record['url']
             depth = url_record['depth']
+            priority = url_record.get('priority', 0)
             url_id = url_record['id']
 
             # Check depth limit
@@ -79,7 +80,8 @@ class Spider:
 
             # 2. Mark as in progress
             Frontier.mark_in_progress(url_id)
-            self.log(f"[cyan]Fetching[/cyan] (depth={depth}): {url}")
+            priority_tag = f"[magenta]P{priority}[/magenta]" if priority > 0 else ""
+            self.log(f"[cyan]Fetching[/cyan] {priority_tag} (d={depth}): {url}")
 
             # 3. Fetch page
             result = self.fetcher.fetch(url)
@@ -107,15 +109,20 @@ class Spider:
             self.pages_crawled += 1
             self.log(f"  [green]Saved[/green] ({result['status_code']}, {len(result['html'])} bytes)")
 
-            # 6. Extract new URLs (only if we haven't hit max_pages)
+            # 6. Extract new URLs with priority (only if we haven't hit max_pages)
             if self.pages_crawled < self.max_pages:
-                new_urls = self.extractor.extract(result['html'], url)
+                url_priorities = self.extractor.extract(result['html'], url)
                 new_depth = depth + 1
 
-                if new_urls and new_depth <= self.max_depth:
-                    added = Frontier.add_urls([(u, new_depth) for u in new_urls])
+                if url_priorities and new_depth <= self.max_depth:
+                    # Format: (url, depth, priority)
+                    urls_with_depth = [(u, new_depth, p) for u, p in url_priorities]
+                    added = Frontier.add_urls(urls_with_depth)
                     self.urls_discovered += added
-                    self.log(f"  [blue]Discovered {added} new URLs[/blue]")
+                    if added > 0:
+                        # Show priority stats
+                        high_priority = sum(1 for _, p in url_priorities if p >= 30)
+                        self.log(f"  [blue]Discovered {added} URLs ({high_priority} high-priority)[/blue]")
 
             # 7. Mark as crawled
             Frontier.mark_crawled(url_id)

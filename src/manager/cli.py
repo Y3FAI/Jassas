@@ -38,14 +38,16 @@ def init():
 
 @app.command()
 def seed(url: str = typer.Argument(..., help="Starting URL to crawl")):
-    """Add a seed URL to the frontier."""
+    """Add a seed URL to the frontier with high priority."""
     if not db_exists():
         console.print("[red]Database not found. Run 'jassas init' first.[/red]")
         raise typer.Exit(1)
 
-    added = Frontier.add_url(url, depth=0)
+    # Arabic URLs get highest priority
+    priority = 100 if '/ar' in url else 50
+    added = Frontier.add_url(url, depth=0, priority=priority)
     if added:
-        console.print(f"[green]Added seed URL:[/green] {url}")
+        console.print(f"[green]Added seed URL (priority={priority}):[/green] {url}")
     else:
         console.print(f"[yellow]URL already exists:[/yellow] {url}")
 

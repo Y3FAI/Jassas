@@ -84,11 +84,11 @@ def run_benchmarks():
 
     # --- Test 2: Latency Breakdown ---
     queries = [
-        "government services",
-        "renew passport",
+        "تجديد جواز السفر",
+        "رخصة القيادة",
+        "المخالفات المرورية",
         "الأمن السيبراني",
-        "national platform",
-        "cybersecurity"
+        "وزارة الصحة",
     ]
 
     console.print(f"[bold yellow]2. Profiling Search Latency ({len(queries)} queries)...[/bold yellow]")

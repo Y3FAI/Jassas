@@ -26,19 +26,21 @@ def init_db():
 
     # ========== CRAWLER LAYER ==========
 
-    # frontier - URL queue for BFS crawling
+    # frontier - URL queue for BFS crawling with priority
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS frontier (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         url             TEXT UNIQUE NOT NULL,
         status          TEXT DEFAULT 'pending',
         depth           INTEGER DEFAULT 0,
+        priority        INTEGER DEFAULT 0,
         error_message   TEXT,
         discovered_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
     )''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_frontier_status ON frontier(status)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_frontier_depth ON frontier(depth)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_frontier_priority ON frontier(priority DESC)')
 
     # raw_pages - HTML archive
     cursor.execute('''
