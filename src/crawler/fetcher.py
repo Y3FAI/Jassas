@@ -92,10 +92,11 @@ class Fetcher:
                 result['error'] = f"HTTP {response.status_code}"
                 return result
 
-            # Check content type
-            content_type = response.headers.get('Content-Type', '')
-            if 'text/html' not in content_type.lower() and 'text/xml' not in content_type.lower():
-                result['error'] = f"Not HTML: {content_type}"
+            # Check content type (allow HTML and XML)
+            content_type = response.headers.get('Content-Type', '').lower()
+            allowed_types = ('text/html', 'text/xml', 'application/xml')
+            if not any(t in content_type for t in allowed_types):
+                result['error'] = f"Not HTML/XML: {content_type}"
                 return result
 
             result['html'] = response.text

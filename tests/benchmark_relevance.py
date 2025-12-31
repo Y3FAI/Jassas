@@ -20,33 +20,31 @@ console = Console()
 
 # OpenRouter config
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-MODEL = "mistralai/devstral-2512:free"
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Test queries - 90% Arabic, 10% English
+# Dual judges for more robust evaluation
+JUDGES = [
+    "mistralai/devstral-2512:free",
+    "qwen/qwen3-235b-a22b:free",
+]
+
+# Test queries - exact service names from DB
 QUERIES = [
-    # Arabic queries (18 = 90%)
-    "تجديد جواز السفر",
-    "رخصة القيادة",
-    "المخالفات المرورية",
-    "الأمن السيبراني",
-    "وزارة الصحة",
-    "تجديد الهوية الوطنية",
-    "العنوان الوطني",
-    "التأشيرات",
-    "الضمان الاجتماعي",
-    "حساب المواطن",
-    "التأمينات الاجتماعية",
-    "نظام نور",
-    "أبشر",
-    "توكلنا",
-    "الزكاة والضريبة",
-    "السجل التجاري",
-    "التوظيف الحكومي",
-    "الخدمات الإلكترونية",
-    # English queries (2 = 10%)
-    "government services",
-    "visa application",
+    "اصدار رخصه بناء",
+    "دفع ضريبه قيمه مضافه",
+    "حجز مواعيد طبيه",
+    "تجديد اقامه",
+    "اصدار تاشيرات عمل",
+    "حجز اسم تجاري",
+    "تسجيل تصرف عقاري",
+    "اصدار هويه وطنيه",
+    "اصدار تاشيره خروج والعوده",
+    "اصدار رخصه سير",
+    "تجديد رخص عمل",
+    "اصدار شهاده اشتراك",
+    "تسجيل في جامعات",
+    "اصدار رخصه حرفيه",
+    "طلب ابتعاث خارجي",
 ]
 
 
@@ -60,14 +58,55 @@ def format_results_for_llm(results: List[dict]) -> str:
     return "\n\n".join(formatted)
 
 
+def call_single_judge(model: str, prompt: str, num_results: int) -> List[int]:
+    """Call a single LLM judge and return scores."""
+    try:
+        resp = requests.post(
+            API_URL,
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+                "max_tokens": 100,
+            },
+            timeout=60
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+
+        # Parse JSON array from response
+        if "```" in content:
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+
+        # Find JSON array in response
+        import re
+        match = re.search(r'\[[\d,\s]+\]', content)
+        if match:
+            scores = json.loads(match.group())
+            return scores[:num_results]
+
+        scores = json.loads(content)
+        return scores[:num_results]
+    except Exception as e:
+        return None  # Return None to indicate failure
+
+
 def call_llm_judge(query: str, results: List[dict]) -> List[int]:
     """
-    Send results to LLM for relevance scoring.
-    Returns list of scores 0-3 for each result.
+    Send results to multiple LLM judges and average their scores.
+    Returns list of averaged scores 0-3 for each result.
     """
     if not OPENROUTER_API_KEY:
         console.print("[red]Error: OPENROUTER_API_KEY not set[/red]")
         return [0] * len(results)
+
+    num_results = min(len(results), 10)
 
     prompt = f"""You are a Search Relevance Evaluator for Saudi government services.
 
@@ -82,39 +121,27 @@ Rate each document's relevance to the query on a scale of 0-3:
 Documents:
 {format_results_for_llm(results)}
 
-Return ONLY a JSON array of {min(len(results), 10)} integers (scores), nothing else.
+Return ONLY a JSON array of {num_results} integers (scores), nothing else.
 Example: [3, 2, 1, 0, 2, 1, 0, 0, 1, 2]"""
 
-    try:
-        resp = requests.post(
-            API_URL,
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0,
-                "max_tokens": 100,
-            },
-            timeout=30
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"].strip()
+    all_scores = []
 
-        # Parse JSON array from response
-        # Handle markdown code blocks if present
-        if "```" in content:
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
+    for model in JUDGES:
+        scores = call_single_judge(model, prompt, num_results)
+        if scores and len(scores) == num_results:
+            all_scores.append(scores)
 
-        scores = json.loads(content)
-        return scores[:10]
-    except Exception as e:
-        console.print(f"[red]LLM error: {e}[/red]")
-        return [0] * min(len(results), 10)
+    if not all_scores:
+        console.print(f"[red]All judges failed[/red]")
+        return [0] * num_results
+
+    # Average scores from all judges
+    averaged = []
+    for i in range(num_results):
+        avg = sum(s[i] for s in all_scores) / len(all_scores)
+        averaged.append(round(avg))
+
+    return averaged
 
 
 def calculate_mrr(scores: List[int]) -> float:
@@ -170,7 +197,7 @@ def run_relevance_benchmark():
         console.print("[dim]export OPENROUTER_API_KEY='your-key-here'[/dim]")
         return
 
-    console.print(f"[dim]Model: {MODEL}[/dim]")
+    console.print(f"[dim]Judges: {', '.join(j.split('/')[1].split(':')[0] for j in JUDGES)}[/dim]")
     console.print(f"[dim]Queries: {len(QUERIES)}[/dim]\n")
 
     # Load ranker

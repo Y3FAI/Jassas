@@ -53,6 +53,46 @@ def seed(url: str = typer.Argument(..., help="Starting URL to crawl")):
 
 
 @app.command()
+def sitemap(url: str = typer.Argument(..., help="Sitemap URL to parse")):
+    """Parse sitemap.xml and add URLs to frontier."""
+    if not db_exists():
+        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold cyan]Parsing Sitemap[/bold cyan]\n")
+
+    from crawler.sitemap import SitemapParser
+    from crawler.fetcher import Fetcher
+
+    fetcher = Fetcher()
+    parser = SitemapParser(fetcher, verbose=True)
+
+    try:
+        urls = parser.parse(url)
+
+        if not urls:
+            console.print("[yellow]No URLs found in sitemap.[/yellow]")
+            return
+
+        # Add to frontier with depth=1 (sitemap discovered)
+        urls_with_depth = [(u, 1, p) for u, p in urls]
+        added = Frontier.add_urls(urls_with_depth)
+
+        console.print(f"\n[green]Added {added} URLs to frontier[/green]")
+
+        # Show priority breakdown
+        high = sum(1 for _, p in urls if p >= 50)
+        med = sum(1 for _, p in urls if 0 < p < 50)
+        low = sum(1 for _, p in urls if p <= 0)
+        console.print(f"  High priority (≥50): {high}")
+        console.print(f"  Medium priority (1-49): {med}")
+        console.print(f"  Low priority (≤0): {low}")
+
+    finally:
+        fetcher.close()
+
+
+@app.command()
 def stats():
     """Show database statistics."""
     if not db_exists():

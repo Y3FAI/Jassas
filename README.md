@@ -4,6 +4,6 @@
 
 ## [Big Picture](docs/BIG_PICTURE.md)
 
-## [DB Schema](docs/DB_SCHEMA.md)
+## [DB Schema](docs/SCHEMA.md)
 
-## [Folder Structure](docs/FOLDER_STRUCTURE.md)
+## [Folder Structure](docs/STRUCTURE.md)
