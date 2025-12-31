@@ -17,6 +17,7 @@ from db import Documents, Vocab
 from db.connection import get_db
 from cleaner.parser import Parser
 from tokenizer.bm25 import BM25Tokenizer
+from tokenizer.vector import VectorEngine
 from ranker.bm25_numpy import NumPyBM25Engine
 
 # Paths
@@ -68,7 +69,7 @@ class Ranker:
         """Lazy load vector model and index."""
         if self.vector_model is None:
             self._log("Loading vector model...")
-            self.vector_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+            self.vector_model = SentenceTransformer(VectorEngine.MODEL_NAME)
 
         if self.vector_index is None and os.path.exists(INDEX_PATH):
             self._log("Loading vector index...")

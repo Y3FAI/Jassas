@@ -17,12 +17,12 @@ class VectorEngine:
     """Generates embeddings and manages vector index."""
 
     # Model config
-    MODEL_NAME = 'paraphrase-multilingual-MiniLM-L12-v2'
-    DIMENSIONS = 384
+    MODEL_NAME = 'intfloat/multilingual-e5-large'
+    DIMENSIONS = 1024
 
     # USearch config (from article optimization)
     INDEX_CONFIG = {
-        'ndim': 384,
+        'ndim': 1024,
         'metric': 'cos',
         'dtype': 'f16',           # Half precision (2x memory savings)
         'connectivity': 32,       # Balanced quality
