@@ -13,12 +13,16 @@ from typing import List, Dict
 from rich.console import Console
 from rich.table import Table
 from rich import box
+from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from ranker.engine import Ranker
 
 console = Console()
+
+# Load environment variables
+load_dotenv()
 
 # OpenRouter config
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -27,7 +31,7 @@ API_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Dual judges
 JUDGES = [
     "mistralai/devstral-2512:free",
-    "qwen/qwen3-235b-a22b:free",
+    "xiaomi/mimo-v2-flash:free",
 ]
 
 # Test questions - specific queries matching actual DB content
@@ -107,18 +111,25 @@ Reply with ONLY: YES or NO"""
         return None
 
 
-def evaluate_question(question: str, results: List[dict]) -> Dict[str, bool]:
+def evaluate_question(question: str, results: List[dict]) -> Dict:
     """
     Evaluate if question is answerable at different K values.
     Uses multiple judges and takes majority vote.
+    Returns detailed results with individual judge votes.
     """
     k_values = [1, 3, 5, 10]
     scores = {}
+    judge_votes = {}  # Track individual judge votes
 
     for k in k_values:
         votes = []
+        judge_votes[f"top_{k}"] = {}
+
         for model in JUDGES:
             result = judge_answerable(model, question, results, k)
+            model_name = model.split('/')[1].split(':')[0]
+            judge_votes[f"top_{k}"][model_name] = result
+
             if result is not None:
                 votes.append(result)
 
@@ -128,7 +139,11 @@ def evaluate_question(question: str, results: List[dict]) -> Dict[str, bool]:
         else:
             scores[f"top_{k}"] = False
 
-    return scores
+    return {
+        "k_scores": scores,
+        "judge_votes": judge_votes,
+        "doc_titles": [r.get('title', 'No Title')[:80] for r in results[:10]]
+    }
 
 
 def run_qa_benchmark():
@@ -166,16 +181,57 @@ def run_qa_benchmark():
         results = ranker.search(question, k=10)
 
         # Evaluate at each K
-        scores = evaluate_question(question, results)
+        evaluation = evaluate_question(question, results)
+        k_scores = evaluation["k_scores"]
+        judge_votes = evaluation["judge_votes"]
+        doc_titles = evaluation["doc_titles"]
 
         # Update totals
         for key in totals:
-            if scores.get(key, False):
+            if k_scores.get(key, False):
                 totals[key] += 1
 
-        # Format row
+        # Display detailed results
+        console.print(f"\n[bold cyan]Question:[/bold cyan] {question}")
+        console.print(f"[dim]Top results found:[/dim]")
+        for i, title in enumerate(doc_titles[:5], 1):
+            console.print(f"  {i}. {title}")
+
+        # Judge votes breakdown
+        vote_table = Table(title="Judge Votes by K", box=box.ROUNDED)
+        vote_table.add_column("K", justify="center", style="dim")
+        vote_table.add_column("Decision", justify="center", style="bold")
+        for judge_name in JUDGES:
+            judge_short = judge_name.split('/')[1].split(':')[0][:8]
+            vote_table.add_column(judge_short, justify="center")
+
+        for k in [1, 3, 5, 10]:
+            k_key = f"top_{k}"
+            decision = "[green]✓[/green]" if k_scores[k_key] else "[red]✗[/red]"
+            row = [str(k), decision]
+
+            for judge_name in JUDGES:
+                judge_short = judge_name.split('/')[1].split(':')[0][:8]
+                judge_key = judge_short.split('-')[0] if '-' in judge_short else judge_short
+                # Find the judge in the votes
+                vote_result = None
+                for key, votes_dict in judge_votes.items():
+                    if key == k_key:
+                        for vname, vresult in votes_dict.items():
+                            if judge_short.startswith(vname[:3]) or vname.startswith(judge_short[:3]):
+                                vote_result = vresult
+                                break
+                vote_text = "[green]Y[/green]" if vote_result else "[red]N[/red]" if vote_result is False else "?"
+                row.append(vote_text)
+
+            vote_table.add_row(*row)
+
+        console.print(vote_table)
+        console.print()
+
+        # Format row for summary table
         def fmt(k):
-            return "[green]✓[/green]" if scores.get(k, False) else "[red]✗[/red]"
+            return "[green]✓[/green]" if k_scores.get(k, False) else "[red]✗[/red]"
 
         table.add_row(
             question[:35],

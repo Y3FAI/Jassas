@@ -11,12 +11,16 @@ from typing import List, Dict
 from rich.console import Console
 from rich.table import Table
 from rich import box
+from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from ranker.engine import Ranker
 
 console = Console()
+
+# Load environment variables
+load_dotenv()
 
 # OpenRouter config
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -25,7 +29,7 @@ API_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Dual judges for more robust evaluation
 JUDGES = [
     "mistralai/devstral-2512:free",
-    "qwen/qwen3-235b-a22b:free",
+    "xiaomi/mimo-v2-flash:free",
 ]
 
 # Test queries - exact service names from DB
@@ -97,14 +101,14 @@ def call_single_judge(model: str, prompt: str, num_results: int) -> List[int]:
         return None  # Return None to indicate failure
 
 
-def call_llm_judge(query: str, results: List[dict]) -> List[int]:
+def call_llm_judge(query: str, results: List[dict]) -> dict:
     """
-    Send results to multiple LLM judges and average their scores.
-    Returns list of averaged scores 0-3 for each result.
+    Send results to multiple LLM judges and return detailed scores.
+    Returns dict with averaged scores, individual judge scores, and doc titles.
     """
     if not OPENROUTER_API_KEY:
         console.print("[red]Error: OPENROUTER_API_KEY not set[/red]")
-        return [0] * len(results)
+        return None
 
     num_results = min(len(results), 10)
 
@@ -125,15 +129,18 @@ Return ONLY a JSON array of {num_results} integers (scores), nothing else.
 Example: [3, 2, 1, 0, 2, 1, 0, 0, 1, 2]"""
 
     all_scores = []
+    judge_scores_by_model = {}
 
     for model in JUDGES:
         scores = call_single_judge(model, prompt, num_results)
         if scores and len(scores) == num_results:
             all_scores.append(scores)
+            model_name = model.split('/')[1].split(':')[0]
+            judge_scores_by_model[model_name] = scores
 
     if not all_scores:
         console.print(f"[red]All judges failed[/red]")
-        return [0] * num_results
+        return None
 
     # Average scores from all judges
     averaged = []
@@ -141,7 +148,12 @@ Example: [3, 2, 1, 0, 2, 1, 0, 0, 1, 2]"""
         avg = sum(s[i] for s in all_scores) / len(all_scores)
         averaged.append(round(avg))
 
-    return averaged
+    return {
+        "averaged_scores": averaged,
+        "judge_scores": judge_scores_by_model,
+        "num_judges": len(all_scores),
+        "doc_titles": [r.get('title', 'No Title')[:80] for r in results[:num_results]]
+    }
 
 
 def calculate_mrr(scores: List[int]) -> float:
@@ -231,7 +243,12 @@ def run_relevance_benchmark():
             continue
 
         # Get LLM scores
-        scores = call_llm_judge(query, results)
+        judgment = call_llm_judge(query, results)
+        if not judgment:
+            table.add_row(query[:30], "-", "-", "-", "-", "Judge failed")
+            continue
+
+        scores = judgment["averaged_scores"]
 
         # Calculate metrics
         mrr = calculate_mrr(scores)
@@ -244,9 +261,31 @@ def run_relevance_benchmark():
         all_precision.append(precision)
         all_avg_scores.append(avg_score)
 
-        # Color code scores
-        score_str = str(scores)
+        # Display detailed results
+        console.print(f"\n[bold cyan]Query:[/bold cyan] {query}")
+        console.print(f"[dim]Judges: {judgment['num_judges']} ({', '.join(judgment['judge_scores'].keys())})[/dim]")
 
+        # Document details table
+        doc_table = Table(title="Scored Documents", box=box.ROUNDED)
+        doc_table.add_column("#", style="dim", width=3)
+        doc_table.add_column("Title", style="cyan", max_width=60)
+        doc_table.add_column("Avg", justify="center", style="bold")
+        for judge_name in judgment['judge_scores'].keys():
+            doc_table.add_column(judge_name[:8], justify="center")
+
+        for i, (title, avg_score_val) in enumerate(zip(judgment['doc_titles'], scores)):
+            row = [str(i+1), title, str(avg_score_val)]
+            for judge_name, judge_scores in judgment['judge_scores'].items():
+                row.append(str(judge_scores[i]))
+            doc_table.add_row(*row)
+
+        console.print(doc_table)
+
+        # Summary for this query
+        console.print(f"[yellow]Metrics:[/yellow] MRR={mrr:.2f} | NDCG@10={ndcg:.2f} | P@10={precision:.0%} | Avg={avg_score:.1f}/3\n")
+
+        # Also add to summary table
+        score_str = str(scores)
         table.add_row(
             query[:30],
             f"{mrr:.2f}",

@@ -216,6 +216,13 @@ class Documents:
             cursor = conn.execute("SELECT COUNT(*) FROM documents")
             return cursor.fetchone()[0]
 
+    @staticmethod
+    def get_tokenized_count() -> int:
+        """Get tokenized (searchable) document count."""
+        with get_db() as conn:
+            cursor = conn.execute("SELECT COUNT(*) FROM documents WHERE status = 'tokenized'")
+            return cursor.fetchone()[0]
+
 
 class Vocab:
     """Vocabulary operations for Tokenizer."""

@@ -7,8 +7,12 @@ import sys
 import json
 from datetime import datetime
 from pathlib import Path
+from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
+
+# Load environment variables
+load_dotenv()
 
 from ranker.engine import Ranker
 

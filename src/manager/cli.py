@@ -134,8 +134,10 @@ def stats():
     table.add_row("Raw Pages", str(pages_count))
 
     # Cleaner section
+    tokenized_count = Documents.get_tokenized_count()
     table.add_row("─── Cleaner ───", "")
-    table.add_row("Documents", str(doc_count))
+    table.add_row("Documents (total)", str(doc_count))
+    table.add_row("Tokenized (searchable)", str(tokenized_count))
     table.add_row("Avg Doc Length", f"{avg_doc_len:.1f}")
 
     # Tokenizer section
@@ -279,6 +281,70 @@ def search(
         )
 
     console.print(table)
+
+
+@app.command()
+def benchmark(
+    test: str = typer.Argument("relevance", help="Test: relevance, qa, human, latency, or all"),
+):
+    """Run benchmarks: accuracy (requires OPENROUTER_API_KEY) or latency."""
+    if not db_exists():
+        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
+        raise typer.Exit(1)
+
+    # Check document count
+    doc_count = Documents.get_total_count()
+    if doc_count == 0:
+        console.print("[yellow]No documents indexed. Run the pipeline first.[/yellow]")
+        raise typer.Exit(1)
+
+    import subprocess
+    import sys
+
+    test_lower = test.lower()
+
+    # Latency benchmark (no API key needed)
+    if test_lower == "latency":
+        console.print(f"\n[bold cyan]Running latency benchmark...[/bold cyan]\n")
+        result = subprocess.run([sys.executable, "tests/benchmark.py"])
+        raise typer.Exit(result.returncode)
+
+    # Accuracy benchmarks (require API key)
+    from dotenv import load_dotenv
+    load_dotenv()
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        console.print("[red]Error: OPENROUTER_API_KEY not found in .env[/red]")
+        console.print("[dim]Create .env file from .env.example and add your API key[/dim]")
+        raise typer.Exit(1)
+
+    test_files = {
+        "relevance": "tests/benchmark_relevance.py",
+        "qa": "tests/benchmark_qa.py",
+        "human": "tests/benchmark_human.py",
+    }
+
+    if test_lower == "all":
+        tests = ["relevance", "qa", "human"]
+    elif test_lower in test_files:
+        tests = [test_lower]
+    else:
+        console.print(f"[red]Invalid test type: {test}[/red]")
+        console.print(f"[dim]Choose: {', '.join(list(test_files.keys()) + ['latency', 'all'])}[/dim]")
+        raise typer.Exit(1)
+
+    env = {**os.environ, "OPENROUTER_API_KEY": api_key}
+
+    for test_name in tests:
+        test_file = test_files[test_name]
+        console.print(f"\n[bold cyan]Running {test_name} benchmark...[/bold cyan]\n")
+        result = subprocess.run([sys.executable, test_file], env=env)
+        if result.returncode != 0:
+            console.print(f"[red]❌ {test_name} benchmark failed[/red]")
+            raise typer.Exit(result.returncode)
+
+    if len(tests) > 1:
+        console.print(f"\n[bold green]✓ All benchmarks completed[/bold green]")
 
 
 @app.command()
