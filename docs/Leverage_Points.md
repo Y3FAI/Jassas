@@ -13,3 +13,7 @@
 ---
 
 ## refactor src/crawler/spider.py to support Multi-threaded Crawling
+
+---
+
+## Optimize BM25: Replace the SQL CTE implementation with SQLite FTS5 or optimize the inverted_index schema for 10k+ scale.
