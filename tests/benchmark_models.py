@@ -1,6 +1,7 @@
 """
 Jassas Embedding Model Benchmark
-Tests FastEmbed models for speed and accuracy on Arabic text.
+Tests embedding models for speed and accuracy on Arabic text.
+Uses FastEmbed when available, falls back to Sentence-Transformers.
 
 Usage:
     python tests/benchmark_models.py
@@ -18,7 +19,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from rich.console import Console
 from rich.table import Table
 from rich import box
-from fastembed import TextEmbedding
+
+# Import both backends
+try:
+    from fastembed import TextEmbedding
+    FASTEMBED_AVAILABLE = True
+except ImportError:
+    FASTEMBED_AVAILABLE = False
+
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 # ============================================================================
 # MODELS TO TEST - Modify this array to add/remove models
@@ -93,10 +106,60 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 
+class EmbeddingWrapper:
+    """Unified wrapper for different embedding backends."""
+
+    def __init__(self, model, backend: str):
+        self.model = model
+        self.backend = backend
+
+    def embed(self, texts: list) -> list:
+        if self.backend == "fastembed":
+            return list(self.model.embed(texts))
+        else:  # sentence-transformers
+            return self.model.encode(texts, convert_to_numpy=True).tolist()
+
+
+def load_model(model_name: str) -> tuple:
+    """
+    Try loading model with fastembed first, fall back to sentence-transformers.
+    Returns (wrapper, backend_name) or raises exception if both fail.
+    """
+    fastembed_error = None
+
+    # Try fastembed first
+    if FASTEMBED_AVAILABLE:
+        try:
+            model = TextEmbedding(model_name)
+            return EmbeddingWrapper(model, "fastembed"), "fastembed"
+        except Exception as e:
+            fastembed_error = str(e)
+            if "not supported" not in fastembed_error.lower():
+                # Re-raise if it's not an unsupported model error
+                raise
+
+    # Fall back to sentence-transformers
+    if SENTENCE_TRANSFORMERS_AVAILABLE:
+        try:
+            model = SentenceTransformer(model_name)
+            return EmbeddingWrapper(model, "sentence-transformers"), "sentence-transformers"
+        except Exception as e:
+            raise RuntimeError(
+                f"FastEmbed: {fastembed_error or 'not available'}; "
+                f"SentenceTransformers: {str(e)}"
+            )
+
+    raise RuntimeError(
+        f"FastEmbed: {fastembed_error or 'not available'}; "
+        f"SentenceTransformers: not installed"
+    )
+
+
 def benchmark_model(model_name: str) -> dict:
     """Benchmark a single model for speed and accuracy."""
     results = {
         "model": model_name,
+        "backend": None,
         "load_time_ms": 0,
         "encode_query_ms": [],
         "encode_doc_ms": 0,
@@ -108,16 +171,18 @@ def benchmark_model(model_name: str) -> dict:
     }
 
     try:
-        # 1. Load model
+        # 1. Load model (tries fastembed first, then sentence-transformers)
         console.print(f"  Loading model...", style="dim")
         start = time.perf_counter()
-        model = TextEmbedding(model_name)
+        wrapper, backend = load_model(model_name)
         results["load_time_ms"] = (time.perf_counter() - start) * 1000
+        results["backend"] = backend
+        console.print(f"  Using backend: [cyan]{backend}[/cyan]", style="dim")
 
         # 2. Encode documents (batch)
         console.print(f"  Encoding {len(ARABIC_DOCUMENTS)} documents...", style="dim")
         start = time.perf_counter()
-        doc_embeddings = list(model.embed(ARABIC_DOCUMENTS))
+        doc_embeddings = wrapper.embed(ARABIC_DOCUMENTS)
         doc_embeddings = np.array(doc_embeddings)
         results["encode_doc_ms"] = (time.perf_counter() - start) * 1000
 
@@ -126,7 +191,7 @@ def benchmark_model(model_name: str) -> dict:
         query_embeddings = []
         for query in ARABIC_QUERIES:
             start = time.perf_counter()
-            emb = list(model.embed([query]))[0]
+            emb = wrapper.embed([query])[0]
             results["encode_query_ms"].append((time.perf_counter() - start) * 1000)
             query_embeddings.append(emb)
         query_embeddings = np.array(query_embeddings)
@@ -207,6 +272,7 @@ def run_benchmarks():
 
     speed_table = Table(box=box.ROUNDED)
     speed_table.add_column("Model", style="cyan")
+    speed_table.add_column("Backend", style="dim")
     speed_table.add_column("Load (ms)", justify="right")
     speed_table.add_column("Query Avg (ms)", justify="right")
     speed_table.add_column("Query Min (ms)", justify="right")
@@ -215,7 +281,7 @@ def run_benchmarks():
 
     for r in all_results:
         if r["error"]:
-            speed_table.add_row(r["model"], "[red]ERROR[/red]", "", "", "", "")
+            speed_table.add_row(r["model"], "", "[red]ERROR[/red]", "", "", "", "")
         else:
             avg_q = statistics.mean(r["encode_query_ms"])
             min_q = min(r["encode_query_ms"])
@@ -223,9 +289,12 @@ def run_benchmarks():
 
             # Color coding for speed
             avg_color = "green" if avg_q < 50 else "yellow" if avg_q < 150 else "red"
+            # Backend short name
+            backend_short = "FE" if r["backend"] == "fastembed" else "ST"
 
             speed_table.add_row(
                 r["model"].split("/")[-1],
+                backend_short,
                 f"{r['load_time_ms']:.0f}",
                 f"[{avg_color}]{avg_q:.1f}[/{avg_color}]",
                 f"{min_q:.1f}",
@@ -240,6 +309,7 @@ def run_benchmarks():
 
     acc_table = Table(box=box.ROUNDED)
     acc_table.add_column("Model", style="cyan")
+    acc_table.add_column("Backend", style="dim")
     acc_table.add_column("MRR", justify="right")
     acc_table.add_column("Recall@1", justify="right")
     acc_table.add_column("Recall@3", justify="right")
@@ -247,14 +317,16 @@ def run_benchmarks():
 
     for r in all_results:
         if r["error"]:
-            acc_table.add_row(r["model"], "[red]ERROR[/red]", "", "", "")
+            acc_table.add_row(r["model"], "", "[red]ERROR[/red]", "", "", "")
         else:
             # Color coding for accuracy
             mrr_color = "green" if r["mrr"] > 0.8 else "yellow" if r["mrr"] > 0.5 else "red"
             r1_color = "green" if r["recall_at_1"] > 0.8 else "yellow" if r["recall_at_1"] > 0.5 else "red"
+            backend_short = "FE" if r["backend"] == "fastembed" else "ST"
 
             acc_table.add_row(
                 r["model"].split("/")[-1],
+                backend_short,
                 f"[{mrr_color}]{r['mrr']:.3f}[/{mrr_color}]",
                 f"[{r1_color}]{r['recall_at_1']:.1%}[/{r1_color}]",
                 f"{r['recall_at_3']:.1%}",
@@ -262,6 +334,7 @@ def run_benchmarks():
             )
 
     console.print(acc_table)
+    console.print("  [dim]Backend: FE = FastEmbed, ST = SentenceTransformers[/dim]")
 
     # Recommendation
     console.print("\n[bold cyan]RECOMMENDATION[/bold cyan]\n")
@@ -284,17 +357,18 @@ def run_benchmarks():
         scored.sort(key=lambda x: x[1], reverse=True)
 
         best = scored[0]
-        console.print(f"  Best overall: [bold green]{best[0]}[/bold green]")
+        best_result = next(r for r in valid_results if r["model"] == best[0])
+        console.print(f"  Best overall: [bold green]{best[0]}[/bold green] ({best_result['backend']})")
         console.print(f"    Speed: {best[2]:.1f}ms | MRR: {best[3]:.3f}")
 
         # Fastest
         fastest = min(valid_results, key=lambda r: statistics.mean(r["encode_query_ms"]))
-        console.print(f"\n  Fastest: [bold yellow]{fastest['model']}[/bold yellow]")
+        console.print(f"\n  Fastest: [bold yellow]{fastest['model']}[/bold yellow] ({fastest['backend']})")
         console.print(f"    Speed: {statistics.mean(fastest['encode_query_ms']):.1f}ms | MRR: {fastest['mrr']:.3f}")
 
         # Most accurate
         most_accurate = max(valid_results, key=lambda r: r["mrr"])
-        console.print(f"\n  Most accurate: [bold blue]{most_accurate['model']}[/bold blue]")
+        console.print(f"\n  Most accurate: [bold blue]{most_accurate['model']}[/bold blue] ({most_accurate['backend']})")
         console.print(f"    Speed: {statistics.mean(most_accurate['encode_query_ms']):.1f}ms | MRR: {most_accurate['mrr']:.3f}")
 
 
