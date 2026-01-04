@@ -46,5 +46,5 @@ def test_access(url):
 
 if __name__ == "__main__":
     # Default to mygov.sa if no argument provided
-    target = sys.argv[1] if len(sys.argv) > 1 else "https://mygov.sa"
+    target = sys.argv[1] if len(sys.argv) > 1 else "https://my.gov.sa"
     test_access(target)
