@@ -5,6 +5,8 @@ Uses FastEmbed when available, falls back to Sentence-Transformers.
 
 Usage:
     python tests/benchmark_models.py
+    python tests/benchmark_models.py --hf-token YOUR_TOKEN
+    python tests/benchmark_models.py --skip-fastembed
 
 Modify MODELS array to test different models.
 """
@@ -12,6 +14,7 @@ import sys
 import os
 import time
 import statistics
+import argparse
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -20,12 +23,30 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 
+# Parse arguments early
+parser = argparse.ArgumentParser(description="Benchmark embedding models")
+parser.add_argument("--hf-token", type=str, help="HuggingFace API token for authenticated downloads")
+parser.add_argument("--skip-fastembed", action="store_true", help="Skip FastEmbed, use only SentenceTransformers")
+args = parser.parse_args()
+
+# Login to HuggingFace if token provided
+if args.hf_token:
+    try:
+        from huggingface_hub import login
+        login(token=args.hf_token, add_to_git_credential=False)
+        os.environ["HF_TOKEN"] = args.hf_token
+        print(f"Logged in to HuggingFace")
+    except Exception as e:
+        print(f"Warning: HuggingFace login failed: {e}")
+
 # Import both backends
-try:
-    from fastembed import TextEmbedding
-    FASTEMBED_AVAILABLE = True
-except ImportError:
-    FASTEMBED_AVAILABLE = False
+FASTEMBED_AVAILABLE = False
+if not args.skip_fastembed:
+    try:
+        from fastembed import TextEmbedding
+        FASTEMBED_AVAILABLE = True
+    except ImportError:
+        pass
 
 try:
     from sentence_transformers import SentenceTransformer
