@@ -134,9 +134,8 @@ def load_model(model_name: str) -> tuple:
             return EmbeddingWrapper(model, "fastembed"), "fastembed"
         except Exception as e:
             fastembed_error = str(e)
-            if "not supported" not in fastembed_error.lower():
-                # Re-raise if it's not an unsupported model error
-                raise
+            # Fall back on: unsupported model, download errors, rate limits
+            # (don't re-raise, let sentence-transformers try)
 
     # Fall back to sentence-transformers
     if SENTENCE_TRANSFORMERS_AVAILABLE:
