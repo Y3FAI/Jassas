@@ -8,7 +8,7 @@ Jassas is a production-grade search engine that combines **lexical (BM25)** and 
 
 ### 1. The Problem
 
-> Finding specific government services in Saudi Arabia is challenging. Citizens navigate dense government portals (mygov.sa) searching for answers like "How do I renew my residency?" or "What's the process for business licensing?" Traditional keyword search often returns entire documents when users need precise, actionable information.
+> Finding specific government services in Saudi Arabia is challenging. Citizens navigate dense government portals (my.gov.sa) searching for answers like "How do I renew my residency?" or "What's the process for business licensing?" Traditional keyword search often returns entire documents when users need precise, actionable information.
 
 > We built **Jassas** to solve this: a search engine that _understands_ Arabic content semantically, ranks results by actual relevance, and responds in under 50ms.
 
@@ -102,7 +102,7 @@ python src/api/main.py
 │                    BUILD PHASE                               │
 └──────────────────────────────────────────────────────────────┘
 
-mygov.sa
+my.gov.sa
    │
    ├──▶ CRAWLER
    │    └─ BFS traversal, priority queue
@@ -155,7 +155,7 @@ User Query: "How to renew residency?"
 ### Data Storage
 
 ```
-mygov.sa
+my.gov.sa
   │
   ├─ CRAWLER (BFS, rate-limited)
   │   └─ raw_pages table

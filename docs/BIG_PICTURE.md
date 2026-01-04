@@ -29,7 +29,7 @@
 ## Data Flow
 
 ```
-mygov.sa ──▶ CRAWLER ──▶ CLEANER ──▶ TOKENIZER ──▶ DATABASE
+my.gov.sa ──▶ CRAWLER ──▶ CLEANER ──▶ TOKENIZER ──▶ DATABASE
                                                        │
 USER QUERY ──▶ RANKER ◀────────────────────────────────┘
                   │
@@ -42,7 +42,7 @@ USER QUERY ──▶ RANKER ◀────────────────�
 | Service       | Role                            |
 | ------------- | ------------------------------- |
 | **Manager**   | CLI to control all services     |
-| **Crawler**   | Fetch HTML from mygov.sa        |
+| **Crawler**   | Fetch HTML from my.gov.sa       |
 | **Cleaner**   | Strip HTML, normalize text      |
 | **Tokenizer** | BM25 tokens + Vector embeddings |
 | **Ranker**    | Query & score results (RRF)     |
@@ -89,7 +89,7 @@ Central control point for all services.
 
 ## Crawler
 
-Fetches pages from mygov.sa using Breadth-First Search.
+Fetches pages from my.gov.sa using Breadth-First Search.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -367,7 +367,7 @@ Shared storage for all services.
 
 ## Target
 
-**Website:** mygov.sa (Saudi Government Services Portal)
+**Website:** my.gov.sa (Saudi Government Services Portal)
 
 **Value:** Official government documentation for services, costs, requirements.
 

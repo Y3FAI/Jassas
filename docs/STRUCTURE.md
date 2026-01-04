@@ -45,7 +45,7 @@ db/
 
 ### crawler/
 
-Fetches pages from mygov.sa using BFS.
+Fetches pages from my.gov.sa using BFS.
 
 ```
 crawler/
@@ -135,9 +135,9 @@ from src.cleaner import start_cleaner
 
 The `data/` folder is gitignored and contains runtime files:
 
-| File | Description |
-|------|-------------|
-| jassas.db | SQLite database |
+| File           | Description          |
+| -------------- | -------------------- |
+| jassas.db      | SQLite database      |
 | jassas.usearch | USearch vector index |
 
 ---

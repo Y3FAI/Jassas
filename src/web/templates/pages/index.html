@@ -1,0 +1,32 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}جساس - محرك البحث{% endblock %}
+
+{% block content %}
+<main class="home">
+    <div class="home-container">
+        <!-- Logo -->
+        <div class="logo">
+            <h1>جساس</h1>
+            <p class="tagline">محرك بحث الخدمات الحكومية</p>
+        </div>
+
+        <!-- Search Box -->
+        <form class="search-form" action="/search" method="GET">
+            <div class="search-box">
+                <input
+                    type="text"
+                    name="q"
+                    class="search-input"
+                    placeholder="ابحث هنا..."
+                    autocomplete="off"
+                    autofocus
+                >
+                <button type="submit" class="search-button">
+                    بحث
+                </button>
+            </div>
+        </form>
+    </div>
+</main>
+{% endblock %}

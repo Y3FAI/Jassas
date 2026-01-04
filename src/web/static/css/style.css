@@ -1,0 +1,131 @@
+/* Jassas - Core Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary: #1a73e8;
+    --primary-hover: #1557b0;
+    --text: #202124;
+    --text-secondary: #5f6368;
+    --text-url: #188038;
+    --bg: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --border: #dfe1e5;
+    --border-focus: #1a73e8;
+}
+
+body {
+    font-family: 'IBM Plex Sans Arabic', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* Home Page */
+.home {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 2rem;
+}
+
+.home-container {
+    width: 100%;
+    max-width: 580px;
+    text-align: center;
+}
+
+/* Logo */
+.logo h1 {
+    font-size: 4rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+}
+
+.tagline {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+}
+
+/* Search Box */
+.search-form {
+    width: 100%;
+}
+
+.search-box {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 0.5rem 1rem;
+    background: var(--bg);
+    transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.search-box:focus-within {
+    border-color: var(--border-focus);
+    box-shadow: 0 1px 6px rgba(26, 115, 232, 0.2);
+}
+
+.search-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 1rem;
+    font-family: inherit;
+    padding: 0.75rem;
+    background: transparent;
+}
+
+.search-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.search-button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.search-button:hover {
+    background: var(--primary-hover);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .logo h1 {
+        font-size: 3rem;
+    }
+
+    .search-box {
+        flex-direction: column;
+        border-radius: 12px;
+        padding: 0.5rem;
+    }
+
+    .search-input {
+        width: 100%;
+        text-align: center;
+    }
+
+    .search-button {
+        width: 100%;
+        margin-top: 0.5rem;
+        border-radius: 8px;
+    }
+}

@@ -11,8 +11,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 
 from ranker.engine import Ranker
+from web.routes import router as web_router
 from api.schemas import SearchRequest, SearchResponse, SearchResult
 
 
@@ -46,6 +49,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Static files
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "web", "static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# Web routes (HTML pages)
+app.include_router(web_router)
 
 
 def generate_snippet(text: str, length: int = 200) -> str:

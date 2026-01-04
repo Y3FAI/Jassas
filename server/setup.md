@@ -21,7 +21,7 @@ pip install -r requirements.txt
 
 ```bash
 ./jassas init
-./jassas seed "https://mygov.sa"
+./jassas seed "https://my.gov.sa"
 ./jassas crawl --max-pages 500
 ./jassas clean
 ./jassas tokenize

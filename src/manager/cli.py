@@ -381,6 +381,24 @@ def benchmark(
 
 
 @app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind"),
+    port: int = typer.Option(8000, "--port", "-p", help="Port to bind"),
+    reload: bool = typer.Option(False, "--reload", "-r", help="Enable auto-reload"),
+):
+    """Start the web server."""
+    import uvicorn
+    console.print(f"\n[bold cyan]Starting Jassas Server[/bold cyan]")
+    console.print(f"[dim]http://{host}:{port}[/dim]\n")
+    uvicorn.run(
+        "api.main:app",
+        host=host,
+        port=port,
+        reload=reload,
+    )
+
+
+@app.command()
 def reset(force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation")):
     """Reset the database (delete all data)."""
     if not db_exists():
