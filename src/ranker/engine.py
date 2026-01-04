@@ -75,21 +75,28 @@ class Ranker:
             self._log("Loading vector index...")
             self.vector_index = Index.restore(INDEX_PATH, view=True)
 
-    def search(self, query: str, k: int = 10) -> List[dict]:
+    def search(self, query: str, k: int = 10, debug: bool = False) -> List[dict]:
         """
         Execute hybrid search (BM25 + Vector) and merge via RRF.
 
         Args:
             query: Search query
             k: Number of results to return
+            debug: Print timing breakdown
 
         Returns:
             List of result dicts with score, title, url
         """
+        import time
+        timings = {}
+
         # Normalize query (same as indexing)
+        start = time.perf_counter()
         normalized_query = self.parser._normalize(query)
+        timings['normalize'] = (time.perf_counter() - start) * 1000
 
         # 1. Execute both searches in parallel
+        start = time.perf_counter()
         with ThreadPoolExecutor(max_workers=2) as executor:
             # BM25 is I/O bound (SQLite)
             future_bm25 = executor.submit(self._bm25_search, normalized_query, 50)
@@ -98,6 +105,7 @@ class Ranker:
 
             bm25_results = future_bm25.result()
             vector_results = future_vector.result()
+        timings['search_parallel'] = (time.perf_counter() - start) * 1000
 
         # 2. RRF Merge
         merged_scores: Dict[int, float] = {}
@@ -115,10 +123,20 @@ class Ranker:
             merged_scores[doc_id] += 1.0 / (self.RRF_K + rank + 1)
 
         # 3. Sort by merged score
+        start = time.perf_counter()
         top_doc_ids = sorted(merged_scores, key=merged_scores.get, reverse=True)[:k]
+        timings['sort'] = (time.perf_counter() - start) * 1000
 
         # 4. Fetch full results
-        return self._fetch_results(top_doc_ids, merged_scores)
+        start = time.perf_counter()
+        results = self._fetch_results(top_doc_ids, merged_scores)
+        timings['fetch'] = (time.perf_counter() - start) * 1000
+
+        if debug or self.verbose:
+            total = sum(timings.values())
+            print(f"[Ranker] normalize={timings['normalize']:.1f}ms, search={timings['search_parallel']:.1f}ms, sort={timings['sort']:.1f}ms, fetch={timings['fetch']:.1f}ms, total={total:.1f}ms")
+
+        return results
 
     def _bm25_search(self, query: str, limit: int = 50) -> List[int]:
         """
@@ -156,7 +174,11 @@ class Ranker:
 
     def _vector_search(self, query: str, limit: int = 50) -> List[int]:
         """Semantic search via USearch."""
+        import time
+
+        start = time.perf_counter()
         self._load_vector_engine()
+        load_time = (time.perf_counter() - start) * 1000
 
         if self.vector_index is None or self.vector_model is None:
             return []
@@ -165,10 +187,17 @@ class Ranker:
             return []
 
         # Encode query
+        start = time.perf_counter()
         embedding = self.vector_model.encode(query).astype(np.float16)
+        encode_time = (time.perf_counter() - start) * 1000
 
         # Search
+        start = time.perf_counter()
         matches = self.vector_index.search(embedding, limit)
+        search_time = (time.perf_counter() - start) * 1000
+
+        if self.verbose:
+            print(f"[Vector] load={load_time:.1f}ms, encode={encode_time:.1f}ms, search={search_time:.1f}ms")
 
         return [int(key) for key in matches.keys]
 

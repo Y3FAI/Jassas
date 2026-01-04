@@ -44,3 +44,8 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Node
+node_modules/
+package.json
+package-lock.json

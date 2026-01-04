@@ -26,6 +26,11 @@ async def lifespan(app: FastAPI):
     try:
         app.state.ranker = Ranker(verbose=True)
         print("OK Ranker loaded successfully")
+
+        # Pre-warm vector model (avoids first-query latency)
+        print("Warming up vector model...")
+        app.state.ranker.search("test", k=1)
+        print("OK Ready to serve")
     except Exception as e:
         print(f"FAIL Failed to load Ranker: {e}")
         raise
@@ -50,9 +55,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static files
+# Static files with caching (1 week)
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "web", "static")
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+class CachedStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "public, max-age=604800"
+        return response
+
+
+app.mount("/static", CachedStaticFiles(directory=STATIC_DIR), name="static")
 
 # Web routes (HTML pages)
 app.include_router(web_router)

@@ -1,0 +1,15 @@
+{% if results %}
+    {% for result in results %}
+    <article class="result-card">
+        <a href="{{ result.url }}" class="result-url" target="_blank">{{ result.url }}</a>
+        <h3 class="result-title">
+            <a href="{{ result.url }}" target="_blank">{{ result.title }}</a>
+        </h3>
+        <p class="result-snippet">{{ result.snippet }}</p>
+    </article>
+    {% endfor %}
+{% elif query %}
+    <div class="no-results">
+        <p>لا توجد نتائج لـ "{{ query }}"</p>
+    </div>
+{% endif %}
