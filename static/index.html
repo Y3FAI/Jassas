@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جساس - محرك البحث</title>
+
+    <!-- SEO -->
+    <meta name="description" content="جساس - محرك بحث سريع للخدمات الحكومية السعودية">
+    <meta name="keywords" content="جساس, بحث, خدمات حكومية, السعودية, محرك بحث">
+    <meta name="author" content="Jassas">
+    <meta name="robots" content="index, follow">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="جساس - محرك البحث">
+    <meta property="og:description" content="محرك بحث سريع للخدمات الحكومية السعودية">
+    <meta property="og:locale" content="ar_SA">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="جساس - محرك البحث">
+    <meta name="twitter:description" content="محرك بحث سريع للخدمات الحكومية السعودية">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+
+    <!-- IBM Plex Sans Arabic -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <main class="home">
+        <div class="logo">جساس</div>
+
+        <div class="search-wrapper">
+            <form action="/search" method="GET">
+                <div class="search-box">
+                    <input
+                        type="text"
+                        name="q"
+                        class="search-input"
+                        placeholder="عن ماذا تبحث؟"
+                        autocomplete="off"
+                        autofocus
+                    >
+                    <button type="submit" class="search-button" aria-label="بحث">
+                        <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </main>
+</body>
+</html>

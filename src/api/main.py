@@ -12,11 +12,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
+from fastapi.responses import FileResponse
 
 from ranker.engine import Ranker
-from web.routes import router as web_router
 from api.schemas import SearchRequest, SearchResponse, SearchResult
+
+# Paths
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+STATIC_DIR = os.path.join(PROJECT_ROOT, "static")
 
 
 @asynccontextmanager
@@ -55,21 +58,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static files with caching (1 week)
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "web", "static")
-
 
 class CachedStaticFiles(StaticFiles):
     async def get_response(self, path, scope):
         response = await super().get_response(path, scope)
         response.headers["Cache-Control"] = "public, max-age=604800"
         return response
-
-
-app.mount("/static", CachedStaticFiles(directory=STATIC_DIR), name="static")
-
-# Web routes (HTML pages)
-app.include_router(web_router)
 
 
 def generate_snippet(text: str, length: int = 200) -> str:
@@ -139,6 +133,24 @@ async def health_check(request: Request):
         "status": "online",
         "engine_ready": is_ready
     }
+
+
+# HTML page routes
+@app.get("/")
+async def serve_home():
+    """Serve home page."""
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+
+@app.get("/search")
+@app.get("/search.html")
+async def serve_search():
+    """Serve search results page."""
+    return FileResponse(os.path.join(STATIC_DIR, "search.html"))
+
+
+# Static files (CSS, JS, images)
+app.mount("/static", CachedStaticFiles(directory=STATIC_DIR), name="static")
 
 
 if __name__ == "__main__":
