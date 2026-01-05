@@ -29,9 +29,9 @@ class Extractor:
     }
 
     # Allowed domains (only crawl these)
+    # Note: URLs are normalized to remove www, so we check the normalized form
     ALLOWED_DOMAINS = {
         'my.gov.sa',
-        'www.my.gov.sa',
     }
 
     # Priority patterns (higher score = crawl first)
@@ -103,14 +103,29 @@ class Extractor:
         return priority
 
     def _clean_url(self, url: str) -> str:
-        """Clean and normalize URL."""
+        """
+        Clean and normalize URL to prevent duplicates.
+        - Forces https (most modern sites redirect anyway)
+        - Removes www subdomain (normalize to non-www)
+        - Removes fragments
+        - Normalizes trailing slashes
+        """
         parsed = urlparse(url)
 
-        # Remove fragment
-        cleaned = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        # Force https for security and deduplication
+        scheme = 'https'
 
-        # Remove trailing slash (normalize)
-        if cleaned.endswith('/') and len(parsed.path) > 1:
+        # Remove www subdomain to normalize
+        netloc = parsed.netloc.lower()
+        if netloc.startswith('www.'):
+            netloc = netloc[4:]
+
+        # Build base URL without fragment
+        path = parsed.path
+        cleaned = f"{scheme}://{netloc}{path}"
+
+        # Remove trailing slash (normalize), except for root path
+        if cleaned.endswith('/') and len(path) > 1:
             cleaned = cleaned[:-1]
 
         # Keep query string if present (some sites need it)

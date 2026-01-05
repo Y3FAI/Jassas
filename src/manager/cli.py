@@ -53,46 +53,6 @@ def seed(url: str = typer.Argument(..., help="Starting URL to crawl")):
 
 
 @app.command()
-def sitemap(url: str = typer.Argument(..., help="Sitemap URL to parse")):
-    """Parse sitemap.xml and add URLs to frontier."""
-    if not db_exists():
-        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
-        raise typer.Exit(1)
-
-    console.print(f"\n[bold cyan]Parsing Sitemap[/bold cyan]\n")
-
-    from crawler.sitemap import SitemapParser
-    from crawler.fetcher import Fetcher
-
-    fetcher = Fetcher()
-    parser = SitemapParser(fetcher, verbose=True)
-
-    try:
-        urls = parser.parse(url)
-
-        if not urls:
-            console.print("[yellow]No URLs found in sitemap.[/yellow]")
-            return
-
-        # Add to frontier with depth=1 (sitemap discovered)
-        urls_with_depth = [(u, 1, p) for u, p in urls]
-        added = Frontier.add_urls(urls_with_depth)
-
-        console.print(f"\n[green]Added {added} URLs to frontier[/green]")
-
-        # Show priority breakdown
-        high = sum(1 for _, p in urls if p >= 50)
-        med = sum(1 for _, p in urls if 0 < p < 50)
-        low = sum(1 for _, p in urls if p <= 0)
-        console.print(f"  High priority (≥50): {high}")
-        console.print(f"  Medium priority (1-49): {med}")
-        console.print(f"  Low priority (≤0): {low}")
-
-    finally:
-        fetcher.close()
-
-
-@app.command()
 def stats():
     """Show database statistics."""
     if not db_exists():
@@ -177,16 +137,50 @@ def crawl(
     max_pages: int = typer.Option(100, "--max-pages", "-n", help="Maximum pages to crawl"),
     max_depth: int = typer.Option(5, "--max-depth", "-d", help="Maximum BFS depth"),
     delay: float = typer.Option(2.0, "--delay", "-t", help="Delay between requests (seconds)"),
+    sitemap: str = typer.Option(None, "--sitemap", "-s", help="Sitemap URL to parse before crawling"),
 ):
-    """Run the crawler."""
+    """Run the crawler (optionally parse sitemap first)."""
     if not db_exists():
         console.print("[red]Database not found. Run 'jassas init' first.[/red]")
         raise typer.Exit(1)
 
+    # If sitemap provided, parse it first
+    if sitemap:
+        console.print(f"\n[bold cyan]Parsing Sitemap[/bold cyan]\n")
+
+        from crawler.sitemap import SitemapParser
+        from crawler.fetcher import Fetcher
+
+        fetcher = Fetcher()
+        parser = SitemapParser(fetcher, verbose=True)
+
+        try:
+            urls = parser.parse(sitemap)
+
+            if urls:
+                # Add to frontier with depth=1 (sitemap discovered)
+                urls_with_depth = [(u, 1, p) for u, p in urls]
+                added = Frontier.add_urls(urls_with_depth)
+
+                console.print(f"\n[green]Added {added} URLs from sitemap to frontier[/green]")
+
+                # Show priority breakdown
+                high = sum(1 for _, p in urls if p >= 50)
+                med = sum(1 for _, p in urls if 0 < p < 50)
+                low = sum(1 for _, p in urls if p <= 0)
+                console.print(f"  High priority (≥50): {high}")
+                console.print(f"  Medium priority (1-49): {med}")
+                console.print(f"  Low priority (≤0): {low}\n")
+            else:
+                console.print("[yellow]No URLs found in sitemap.[/yellow]\n")
+
+        finally:
+            fetcher.close()
+
     # Check if frontier has URLs
     pending = Frontier.get_next_pending(limit=1)
     if not pending:
-        console.print("[yellow]No URLs in frontier. Run 'jassas seed <url>' first.[/yellow]")
+        console.print("[yellow]No URLs in frontier. Run 'jassas seed <url>' or use --sitemap first.[/yellow]")
         raise typer.Exit(1)
 
     from crawler import start
@@ -214,10 +208,10 @@ def clean(
 
 
 @app.command()
-def tokenize(
+def build(
     batch_size: int = typer.Option(32, "--batch", "-b", help="Batch size for processing"),
 ):
-    """Run the tokenizer to build search indexes."""
+    """Build search indexes from scratch (resets tokenization, rebuilds BM25 + vectors)."""
     if not db_exists():
         console.print("[red]Database not found. Run 'jassas init' first.[/red]")
         raise typer.Exit(1)
@@ -228,40 +222,68 @@ def tokenize(
         console.print("[yellow]No documents found. Run 'jassas clean' first.[/yellow]")
         raise typer.Exit(1)
 
-    # Check for pending documents
-    pending = Documents.get_pending(limit=1)
-    if not pending:
-        console.print("[yellow]No pending documents to tokenize.[/yellow]")
-        return
+    console.print("\n[bold yellow]This will reset all tokenization and rebuild indexes from scratch.[/bold yellow]")
+    console.print("[dim]• All documents will be re-tokenized[/dim]")
+    console.print("[dim]• Vocabulary and inverted index will be cleared[/dim]")
+    console.print("[dim]• Vector embeddings will be regenerated[/dim]")
+    console.print("[dim]• BM25 matrix will be rebuilt[/dim]\n")
 
-    from tokenizer import start
-    start(batch_size=batch_size)
+    if not typer.confirm("Continue?"):
+        raise typer.Abort()
 
+    # 1. Reset tokenization
+    console.print("\n[cyan]Step 1/3: Resetting tokenization...[/cyan]")
 
-@app.command()
-def build_index():
-    """Build NumPy BM25 matrix index from tokenized documents."""
-    if not db_exists():
-        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
-        raise typer.Exit(1)
-
-    # Check if there are tokenized documents
     with get_db() as conn:
-        cursor = conn.execute("SELECT COUNT(*) FROM documents WHERE status = 'tokenized'")
-        tokenized_count = cursor.fetchone()[0]
+        # Reset all document statuses to pending
+        cursor = conn.execute("UPDATE documents SET status = 'pending'")
+        reset_count = cursor.rowcount
+        console.print(f"  [green]Reset {reset_count} documents to pending[/green]")
 
-    if tokenized_count == 0:
-        console.print("[yellow]No tokenized documents found. Run 'jassas tokenize' first.[/yellow]")
+        # Clear inverted_index table first (foreign key constraint)
+        cursor = conn.execute("DELETE FROM inverted_index")
+        index_deleted = cursor.rowcount
+        console.print(f"  [green]Cleared {index_deleted} index entries[/green]")
+
+        # Clear vocab table after inverted_index
+        cursor = conn.execute("DELETE FROM vocab")
+        vocab_deleted = cursor.rowcount
+        console.print(f"  [green]Cleared {vocab_deleted} vocabulary entries[/green]")
+
+    # Delete vector index file
+    import os
+    from pathlib import Path
+    data_path = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / 'data'
+    vector_path = data_path / 'vectors.usearch'
+    bm25_path = data_path / 'bm25_matrix.pkl'
+
+    if vector_path.exists():
+        vector_path.unlink()
+        console.print(f"  [green]Deleted vector index[/green]")
+
+    if bm25_path.exists():
+        bm25_path.unlink()
+        console.print(f"  [green]Deleted BM25 matrix[/green]")
+
+    # 2. Run tokenization
+    console.print("\n[cyan]Step 2/3: Tokenizing documents...[/cyan]")
+    from tokenizer import start as tokenize_start
+    try:
+        tokenize_start(batch_size=batch_size, verbose=True)
+    except Exception as e:
+        console.print(f"[red]Error during tokenization: {e}[/red]")
         raise typer.Exit(1)
 
-    console.print(f"\n[bold cyan]Building NumPy BM25 Index[/bold cyan]\n")
-
+    # 3. Build BM25 index
+    console.print("\n[cyan]Step 3/3: Building BM25 matrix...[/cyan]")
     from scripts.build_index import build_index as build_bm25_index
     try:
         build_bm25_index()
     except Exception as e:
-        console.print(f"[red]Error building index: {e}[/red]")
+        console.print(f"[red]Error building BM25 index: {e}[/red]")
         raise typer.Exit(1)
+
+    console.print("\n[bold green]✓ Build complete! Search indexes are ready.[/bold green]")
 
 
 @app.command()
@@ -284,7 +306,7 @@ def search(
     import os
     bm25_index_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'bm25_matrix.pkl')
     if not os.path.exists(bm25_index_path):
-        console.print("[yellow]BM25 index not found. Run 'jassas build-index' first.[/yellow]")
+        console.print("[yellow]BM25 index not found. Run 'jassas build' first.[/yellow]")
         raise typer.Exit(1)
 
     console.print(f"\n[cyan]Searching:[/cyan] {query}\n")
@@ -396,6 +418,23 @@ def serve(
         port=port,
         reload=reload,
     )
+
+
+@app.command()
+def deduplicate():
+    """Remove duplicate URLs from database (www vs non-www, http vs https)."""
+    if not db_exists():
+        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
+        raise typer.Exit(1)
+
+    console.print("\n[bold yellow]Warning:[/bold yellow] This will remove duplicate URLs from the database.")
+    console.print("[dim]URLs will be normalized to: https, no www[/dim]")
+
+    if not typer.confirm("\nContinue?"):
+        raise typer.Abort()
+
+    from scripts.deduplicate_urls import main as deduplicate_main
+    deduplicate_main()
 
 
 @app.command()

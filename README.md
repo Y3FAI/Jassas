@@ -63,26 +63,25 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Build Search Index (5-step pipeline)
+### Build Search Index (4-step pipeline)
 
 ```bash
 # 1. Initialize database
 ./jassas init
 
-# 2. Add seed URL to crawl
+# 2. Crawl pages (optionally with sitemap, BFS, configurable depth/limit)
+./jassas crawl --sitemap "https://example.com/sitemap.xml" --max-pages 1000 --max-depth 5
+# Or start with a seed URL:
 ./jassas seed "https://example.com/services"
-
-# 3. Crawl pages (BFS, configurable depth/limit)
 ./jassas crawl --max-pages 1000 --max-depth 5
 
-# 4. Clean HTML, extract text
+# 3. Clean HTML, extract text
 ./jassas clean --batch 10
 
-# 5. Build search indexes (BM25 matrix + vector embeddings)
-./jassas tokenize --batch 32
-./jassas build-index
+# 4. Build search indexes (BM25 matrix + vector embeddings)
+./jassas build --batch 32
 
-# 6. Search!
+# 5. Search!
 ./jassas search "your query" --limit 10
 ```
 
@@ -200,14 +199,14 @@ jassas reset --force     # Delete all data
 
 # Crawling
 jassas seed <URL>                        # Add seed with priority
-jassas sitemap <URL>                     # Parse sitemap.xml
-jassas crawl -n 1000 -d 5 -t 2.0         # Run crawler
+jassas crawl -s <sitemap_url> -n 1000 -d 5 -t 2.0  # Parse sitemap & crawl
+jassas crawl -n 1000 -d 5 -t 2.0         # Crawl from frontier
 jassas frontier --limit 20               # View pending URLs
 
 # Processing
 jassas clean --batch 10                  # Clean raw pages
-jassas tokenize --batch 32               # Build indexes
-jassas build-index                       # Compile BM25 matrix
+jassas build --batch 32                  # Build search indexes (resets & rebuilds from scratch)
+jassas deduplicate                       # Remove duplicate URLs (www/http variations)
 
 # Search & Evaluation
 jassas search "query" --limit 10          # Search
@@ -265,13 +264,13 @@ _Estimates based on linear scaling of sparse matrix operations_
 
 ## Model Configuration
 
-**Embedding Model:** `intfloat/multilingual-e5-large`
+**Embedding Model:** `sentence-transformers/paraphrase-multilingual-mpnet-base-v2`
 
--   **Dimensions:** 1024
--   **Language Support:** 100+ languages
--   **Training Data:** mLLM-1M (multilingual large-scale document corpus)
--   **Architecture:** Transformer-based
--   **Why E5?** Superior multilingual performance vs. paraphrase-MiniLM (+18% relevance for 2.3x latency cost)
+-   **Dimensions:** 768
+-   **Language Support:** 50+ languages (including Arabic)
+-   **Training Data:** Paraphrase datasets in multiple languages
+-   **Architecture:** MPNet-based transformer
+-   **Why MPNet?** Excellent multilingual performance with balanced speed/accuracy trade-off
 
 **BM25 Parameters:**
 
@@ -364,9 +363,9 @@ For specialized domains, see [embedding-finetuning](docs/EXPANTION.md#embedding-
 | Issue                    | Solution                                                 |
 | ------------------------ | -------------------------------------------------------- |
 | `Database not found`     | Run `jassas init` first                                  |
-| `BM25 index not found`   | Run `jassas build-index` after tokenization              |
-| `Vector index not found` | Ensure tokenize step completed; indexes auto-created     |
-| `Out of memory`          | Reduce batch sizes (crawler, cleaner, tokenizer)         |
+| `BM25 index not found`   | Run `jassas build` to build search indexes               |
+| `Vector index not found` | Run `jassas build` to build search indexes               |
+| `Out of memory`          | Reduce batch size: `jassas build --batch 16`             |
 | `Slow vector search`     | Model loading time (~3s cold start). Use persistent API. |
 
 ## Contributing
@@ -406,6 +405,6 @@ If you use Jassas, cite as:
 
 ---
 
-**Last Updated:** 2026-01-01
-**Model Version:** intfloat/multilingual-e5-large
+**Last Updated:** 2026-01-05
+**Model Version:** sentence-transformers/paraphrase-multilingual-mpnet-base-v2
 **Status:** Production-ready

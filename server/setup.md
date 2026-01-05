@@ -24,17 +24,15 @@ pip install -r requirements.txt
 ### **2. Bootstrap Data**
 
 ```bash
-# Initialize and seed data
+# Initialize database
 ./jassas init
-./jassas seed "https://my.gov.sa"
 
-# Crawl (Adjust pages as needed)
-./jassas crawl --max-pages 500
+# Crawl with sitemap (Adjust pages as needed)
+./jassas crawl --sitemap "https://my.gov.sa/sitemap.xml" --max-pages 500
 
 # Process data
 ./jassas clean
-./jassas tokenize
-./jassas build-index
+./jassas build
 
 ```
 

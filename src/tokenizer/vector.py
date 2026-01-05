@@ -18,12 +18,12 @@ class VectorEngine:
     """Generates embeddings and manages vector index."""
 
     # Model config - FastEmbed model name
-    MODEL_NAME = 'intfloat/multilingual-e5-large'
-    DIMENSIONS = 1024
+    MODEL_NAME = 'sentence-transformers/paraphrase-multilingual-mpnet-base-v2'
+    DIMENSIONS = 768
 
     # USearch config (from article optimization)
     INDEX_CONFIG = {
-        'ndim': 1024,
+        'ndim': 768,
         'metric': 'cos',
         'dtype': 'f16',           # Half precision (2x memory savings)
         'connectivity': 32,       # Balanced quality
