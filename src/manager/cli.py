@@ -134,57 +134,75 @@ def frontier(limit: int = typer.Option(10, help="Number of URLs to show")):
 
 @app.command()
 def crawl(
-    max_pages: int = typer.Option(100, "--max-pages", "-n", help="Maximum pages to crawl"),
-    max_depth: int = typer.Option(5, "--max-depth", "-d", help="Maximum BFS depth"),
-    delay: float = typer.Option(2.0, "--delay", "-t", help="Delay between requests (seconds)"),
-    sitemap: str = typer.Option(None, "--sitemap", "-s", help="Sitemap URL to parse before crawling"),
+    site: str = typer.Argument(None, help="Site domain (e.g., my.gov.sa) to use site-specific config"),
+    max_pages: int = typer.Option(None, "--max-pages", "-n", help="Maximum pages to crawl"),
+    delay: float = typer.Option(None, "--delay", "-t", help="Delay between requests (seconds)"),
 ):
-    """Run the crawler (optionally parse sitemap first)."""
+    """Run the crawler using site config or manual options."""
     if not db_exists():
         console.print("[red]Database not found. Run 'jassas init' first.[/red]")
         raise typer.Exit(1)
 
-    # If sitemap provided, parse it first
-    if sitemap:
-        console.print(f"\n[bold cyan]Parsing Sitemap[/bold cyan]\n")
+    config = None
 
-        from crawler.sitemap import SitemapParser
-        from crawler.fetcher import Fetcher
-
-        fetcher = Fetcher()
-        parser = SitemapParser(fetcher, verbose=True)
-
+    # Load site config if provided
+    if site:
+        from crawler.sites import get_site_config
         try:
-            urls = parser.parse(sitemap)
+            config = get_site_config(site)
+            console.print(f"\n[bold cyan]Using config for: {site}[/bold cyan]")
+            console.print(f"  Sitemap: {config.sitemap_url}")
+            console.print(f"  Sitemap only: {config.sitemap_only}")
+            console.print(f"  URL filters: {config.url_filters}")
+            console.print(f"  Language: {config.language}")
+            console.print(f"  Playwright: {config.use_playwright}\n")
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1)
 
-            if urls:
-                # Add to frontier with depth=1 (sitemap discovered)
-                urls_with_depth = [(u, 1, p) for u, p in urls]
-                added = Frontier.add_urls(urls_with_depth)
+        # Override config with CLI options if provided
+        if max_pages:
+            config.max_pages = max_pages
+        if delay:
+            config.delay = delay
 
-                console.print(f"\n[green]Added {added} URLs from sitemap to frontier[/green]")
+        # Parse sitemap with config filters
+        if config.sitemap_url:
+            console.print(f"[bold cyan]Parsing Sitemap[/bold cyan]\n")
 
-                # Show priority breakdown
-                high = sum(1 for _, p in urls if p >= 50)
-                med = sum(1 for _, p in urls if 0 < p < 50)
-                low = sum(1 for _, p in urls if p <= 0)
-                console.print(f"  High priority (≥50): {high}")
-                console.print(f"  Medium priority (1-49): {med}")
-                console.print(f"  Low priority (≤0): {low}\n")
-            else:
-                console.print("[yellow]No URLs found in sitemap.[/yellow]\n")
+            from crawler.sitemap import SitemapParser
+            from crawler.fetcher import Fetcher
 
-        finally:
-            fetcher.close()
+            fetcher = Fetcher()
+            parser = SitemapParser(fetcher, verbose=True)
+
+            try:
+                urls = parser.parse(config.sitemap_url)
+
+                if urls:
+                    # Apply config filters
+                    filtered = []
+                    for url, priority in urls:
+                        url = config.transform_url(url)
+                        if config.should_crawl(url):
+                            filtered.append((url, 1, priority))
+
+                    added = Frontier.add_urls(filtered)
+                    console.print(f"\n[green]Added {added}/{len(urls)} URLs (filtered) to frontier[/green]\n")
+                else:
+                    console.print("[yellow]No URLs found in sitemap.[/yellow]\n")
+
+            finally:
+                fetcher.close()
 
     # Check if frontier has URLs
     pending = Frontier.get_next_pending(limit=1)
     if not pending:
-        console.print("[yellow]No URLs in frontier. Run 'jassas seed <url>' or use --sitemap first.[/yellow]")
+        console.print("[yellow]No URLs in frontier. Provide a site or use 'jassas seed <url>'.[/yellow]")
         raise typer.Exit(1)
 
     from crawler import start
-    start(max_pages=max_pages, max_depth=max_depth, delay=delay)
+    start(config=config, max_pages=max_pages or 100, delay=delay or 2.0)
 
 
 @app.command()
@@ -205,6 +223,54 @@ def clean(
 
     from cleaner import start
     start(batch_size=batch_size)
+
+
+@app.command()
+def tokenize(
+    batch_size: int = typer.Option(32, "--batch", "-b", help="Batch size for processing"),
+):
+    """Tokenize pending documents (incremental - continues where it left off)."""
+    if not db_exists():
+        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
+        raise typer.Exit(1)
+
+    # Check if there are documents
+    doc_count = Documents.get_total_count()
+    if doc_count == 0:
+        console.print("[yellow]No documents found. Run 'jassas clean' first.[/yellow]")
+        raise typer.Exit(1)
+
+    # Check how many are pending
+    tokenized = Documents.get_tokenized_count()
+    pending = doc_count - tokenized
+
+    if pending == 0:
+        console.print("[green]All documents already tokenized.[/green]")
+        console.print("[dim]Use 'jassas build' to rebuild from scratch.[/dim]")
+        raise typer.Exit(0)
+
+    console.print(f"\n[cyan]Found {pending} pending documents (of {doc_count} total)[/cyan]")
+    console.print("[dim]This will continue from where it left off.[/dim]\n")
+
+    # Run tokenization (incremental - only processes pending docs)
+    console.print("[cyan]Step 1/2: Tokenizing documents...[/cyan]")
+    from tokenizer import start as tokenize_start
+    try:
+        tokenize_start(batch_size=batch_size, verbose=True)
+    except Exception as e:
+        console.print(f"[red]Error during tokenization: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Rebuild BM25 index (must be rebuilt to include new docs)
+    console.print("\n[cyan]Step 2/2: Rebuilding BM25 matrix...[/cyan]")
+    from scripts.build_index import build_index as build_bm25_index
+    try:
+        build_bm25_index()
+    except Exception as e:
+        console.print(f"[red]Error building BM25 index: {e}[/red]")
+        raise typer.Exit(1)
+
+    console.print("\n[bold green]Tokenization complete! New documents are now searchable.[/bold green]")
 
 
 @app.command()

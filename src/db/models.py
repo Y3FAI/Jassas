@@ -158,13 +158,13 @@ class Documents:
     """Cleaned document operations for Cleaner/Tokenizer."""
 
     @staticmethod
-    def create(raw_page_id: int, url: str, title: str, clean_text: str, doc_len: int) -> int:
+    def create(raw_page_id: int, url: str, title: str, clean_text: str, doc_len: int, description: str = None) -> int:
         """Create cleaned document. Returns document ID."""
         with get_db() as conn:
             cursor = conn.execute(
-                """INSERT INTO documents (raw_page_id, url, title, clean_text, doc_len)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (raw_page_id, url, title, clean_text, doc_len)
+                """INSERT INTO documents (raw_page_id, url, title, description, clean_text, doc_len)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (raw_page_id, url, title, description, clean_text, doc_len)
             )
             return cursor.lastrowid
 
@@ -173,7 +173,7 @@ class Documents:
         """Get documents pending tokenization."""
         with get_db() as conn:
             cursor = conn.execute(
-                """SELECT id, url, title, clean_text, doc_len
+                """SELECT id, url, title, description, clean_text, doc_len
                    FROM documents
                    WHERE status = 'pending'
                    LIMIT ?""",

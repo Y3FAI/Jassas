@@ -22,23 +22,25 @@ class Parser:
         Returns:
             dict with keys:
                 - title: str (cleaned title)
+                - description: str (meta description)
                 - clean_text: str (normalized body text)
                 - doc_len: int (word count for BM25)
         """
         if not html or not html.strip():
-            return {'title': '', 'clean_text': '', 'doc_len': 0}
+            return {'title': '', 'description': '', 'clean_text': '', 'doc_len': 0}
 
         try:
             soup = BeautifulSoup(html, 'lxml')
         except Exception:
-            return {'title': '', 'clean_text': '', 'doc_len': 0}
+            return {'title': '', 'description': '', 'clean_text': '', 'doc_len': 0}
+
+        # Extract title and description before removing meta tags
+        title = self._extract_title(soup)
+        description = self._extract_description(soup)
 
         # Remove noise tags
         for tag in soup(self.NOISE_TAGS):
             tag.decompose()
-
-        # Extract title
-        title = self._extract_title(soup)
 
         # Extract body text
         text = soup.get_text(separator=' ')
@@ -49,6 +51,7 @@ class Parser:
 
         return {
             'title': clean_title,
+            'description': description,
             'clean_text': clean_text,
             'doc_len': len(clean_text.split())
         }
@@ -63,6 +66,17 @@ class Parser:
         h1 = soup.find('h1')
         if h1:
             return h1.get_text(strip=True)
+        return ""
+
+    def _extract_description(self, soup: BeautifulSoup) -> str:
+        """Extract meta description."""
+        meta = soup.find('meta', attrs={'name': 'description'})
+        if meta and meta.get('content'):
+            return meta['content'].strip()
+        # Try og:description
+        og_meta = soup.find('meta', attrs={'property': 'og:description'})
+        if og_meta and og_meta.get('content'):
+            return og_meta['content'].strip()
         return ""
 
     def _normalize(self, text: str) -> str:

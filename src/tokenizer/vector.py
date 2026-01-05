@@ -1,27 +1,37 @@
 """
 Vector Engine - Generates embeddings and manages USearch index.
-Uses FastEmbed (ONNX) for fast CPU inference.
+Uses jassas-embedding (ONNX INT8) for fast Arabic semantic search.
 """
 import os
 from typing import List, Tuple
 import numpy as np
-from fastembed import TextEmbedding
 from usearch.index import Index
+
+# PERFORMANCE FLAGS - Must be set before importing ONNX runtime
+os.environ["OMP_NUM_THREADS"] = "1"
+
+from transformers import AutoTokenizer
+from optimum.onnxruntime import ORTModelForFeatureExtraction
 
 
 # Paths
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data')
 INDEX_PATH = os.path.join(DATA_DIR, 'vectors.usearch')
+MODEL_PATH = 'y3fai/jassas-embedding'  # HuggingFace Hub (private)
 
 
 class VectorEngine:
-    """Generates embeddings and manages vector index."""
+    """
+    Generates embeddings using jassas-embedding (ONNX INT8).
+    Manages USearch vector index for fast similarity search.
+    """
 
-    # Model config - FastEmbed model name
-    MODEL_NAME = 'sentence-transformers/paraphrase-multilingual-mpnet-base-v2'
+    # Model config
+    MODEL_NAME = MODEL_PATH  # Local path or HuggingFace hub path
     DIMENSIONS = 768
+    MAX_LENGTH = 512
 
-    # USearch config (from article optimization)
+    # USearch config (optimized for recall/speed balance)
     INDEX_CONFIG = {
         'ndim': 768,
         'metric': 'cos',
@@ -31,15 +41,39 @@ class VectorEngine:
         'expansion_search': 100,  # Better recall
     }
 
-    def __init__(self, batch_size: int = 32):
+    # Singleton instances for model reuse
+    _tokenizer = None
+    _model = None
+
+    def __init__(self, batch_size: int = 32, model_path: str = None):
         self.batch_size = batch_size
-        self.model = None
+        self.model_path = model_path or MODEL_PATH
         self.index = None
 
+    @classmethod
+    def _load_model_singleton(cls, model_path: str):
+        """Load model as singleton for memory efficiency."""
+        if cls._tokenizer is None or cls._model is None:
+            print(f"Loading jassas-embedding: {model_path}")
+
+            # Tokenizer with critical regex fix
+            cls._tokenizer = AutoTokenizer.from_pretrained(
+                model_path,
+                clean_up_tokenization_spaces=True,
+                fix_mistral_regex=True  # CRITICAL for Gemma tokenizer
+            )
+
+            # ONNX Runtime model (INT8 quantized)
+            cls._model = ORTModelForFeatureExtraction.from_pretrained(
+                model_path,
+                file_name="model_quantized.onnx"
+            )
+
+        return cls._tokenizer, cls._model
+
     def load_model(self):
-        """Load the FastEmbed model."""
-        if self.model is None:
-            self.model = TextEmbedding(self.MODEL_NAME)
+        """Load the Jassas embedding model."""
+        self._load_model_singleton(self.model_path)
 
     def create_index(self):
         """Create a new USearch index."""
@@ -59,18 +93,45 @@ class VectorEngine:
             self.index.save(INDEX_PATH)
 
     def encode(self, texts: List[str]) -> np.ndarray:
-        """Generate embeddings for texts."""
-        self.load_model()
-        # FastEmbed returns generator, convert to numpy
-        embeddings = list(self.model.embed(texts))
-        return np.array(embeddings)
+        """
+        Generate embeddings for texts using jassas-embedding.
+
+        Uses mean pooling + L2 normalization for optimal semantic similarity.
+        Target latency: <35ms per query.
+        """
+        tokenizer, model = self._load_model_singleton(self.model_path)
+
+        # Tokenize
+        inputs = tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=self.MAX_LENGTH,
+            return_tensors="pt"
+        )
+
+        # Inference
+        outputs = model(**inputs)
+
+        # Mean pooling over sequence length
+        embeddings = outputs.last_hidden_state.mean(dim=1)
+
+        # L2 normalization (required for cosine similarity)
+        embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
+
+        return embeddings.detach().numpy()
 
     def encode_batch(self, texts: List[str]) -> np.ndarray:
-        """Generate embeddings in batches."""
+        """Generate embeddings in batches for large document sets."""
         self.load_model()
-        # FastEmbed handles batching internally
-        embeddings = list(self.model.embed(texts))
-        return np.array(embeddings)
+
+        all_embeddings = []
+        for i in range(0, len(texts), self.batch_size):
+            batch = texts[i:i + self.batch_size]
+            embeddings = self.encode(batch)
+            all_embeddings.append(embeddings)
+
+        return np.vstack(all_embeddings)
 
     def add_documents(self, doc_ids: List[int], texts: List[str]):
         """

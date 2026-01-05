@@ -63,6 +63,7 @@ def init_db():
         raw_page_id     INTEGER NOT NULL,
         url             TEXT NOT NULL,
         title           TEXT,
+        description     TEXT,
         clean_text      TEXT,
         doc_len         INTEGER DEFAULT 0,
         status          TEXT DEFAULT 'pending',

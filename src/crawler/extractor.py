@@ -132,6 +132,9 @@ class Extractor:
         if parsed.query:
             cleaned = f"{cleaned}?{parsed.query}"
 
+        # Fix duplicate path segments (e.g., /ar/ar/ -> /ar/)
+        cleaned = re.sub(r'/([^/]+)/\1(?=/|$)', r'/\1', cleaned)
+
         return cleaned
 
     def _is_valid(self, url: str) -> bool:

@@ -95,10 +95,11 @@ class Tokenizer:
             term_freqs = self.bm25.get_term_frequencies(text)
             self._add_to_index(doc_id, term_freqs)
 
-            # 2. Prepare for vector embedding (title + text snippet)
+            # 2. Prepare for vector embedding (title + description + text)
             doc_ids.append(doc_id)
-            # Use title + first part of text for embedding
-            embed_text = f"{title} {text[:1000]}"
+            description = doc.get('description', '')
+            # Use title + description + text for embedding
+            embed_text = f"{title}. {description}. {text[:800]}"
             texts.append(embed_text)
 
             self.docs_processed += 1

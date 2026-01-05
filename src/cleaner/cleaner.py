@@ -4,15 +4,20 @@ Processes raw_pages → documents in batches.
 """
 import sys
 import os
+import re
+from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rich.console import Console
+
+# Log folder for cleaned output dumps
+LOG_DIR = Path(__file__).parent.parent.parent / 'log'
 from rich.table import Table
 from rich import box
 
 from db import RawPages, Documents
 from db.connection import get_db
-from cleaner.parser import Parser
+from cleaner.sites import get_parser
 
 console = Console()
 
@@ -23,7 +28,6 @@ class Cleaner:
     def __init__(self, batch_size: int = 10, verbose: bool = True):
         self.batch_size = batch_size
         self.verbose = verbose
-        self.parser = Parser()
 
         # Stats
         self.cleaned = 0
@@ -34,6 +38,21 @@ class Cleaner:
         """Print if verbose mode."""
         if self.verbose:
             console.print(message, style=style)
+
+    def _dump_cleaned(self, url: str, result: dict):
+        """Dump cleaned output to log folder for inspection."""
+        LOG_DIR.mkdir(exist_ok=True)
+        safe_name = re.sub(r'[^\w\-]', '_', url.split('/')[-1] or 'index')[:50]
+        filename = f"cleaned_{safe_name}.txt"
+
+        output = f"""URL: {url}
+TITLE: {result['title']}
+DESCRIPTION: {result.get('description', '')}
+WORDS: {result['doc_len']}
+{'='*60}
+{result['clean_text']}
+"""
+        (LOG_DIR / filename).write_text(output, encoding='utf-8')
 
     def clean(self) -> dict:
         """
@@ -87,9 +106,10 @@ class Cleaner:
             except UnicodeDecodeError:
                 html = html.decode('utf-8', errors='replace')
 
-        # Parse
+        # Get site-specific parser and parse
         try:
-            result = self.parser.parse(html)
+            parser = get_parser(url)
+            result = parser.parse(html)
         except Exception as e:
             self.log(f"  [red]Parse error ({url}): {e}[/red]")
             self.failed += 1
@@ -101,6 +121,12 @@ class Cleaner:
             self.skipped += 1
             return
 
+        # Skip soft 404s (server returns 200 but content is error page)
+        if self._is_soft_404(result['clean_text']):
+            self.log(f"  [dim]Skipped (soft 404): {url}[/dim]")
+            self.skipped += 1
+            return
+
         # Save to documents
         try:
             Documents.create(
@@ -108,13 +134,34 @@ class Cleaner:
                 url=url,
                 title=result['title'],
                 clean_text=result['clean_text'],
-                doc_len=result['doc_len']
+                doc_len=result['doc_len'],
+                description=result.get('description', '')
             )
             self.cleaned += 1
             self.log(f"  [green]Cleaned[/green]: {result['title'][:50]}... ({result['doc_len']} words)")
         except Exception as e:
             self.log(f"  [red]Save error ({url}): {e}[/red]")
             self.failed += 1
+
+    def _is_soft_404(self, text: str) -> bool:
+        """Detect soft 404 pages (200 OK but error content)."""
+        # Too short to be useful
+        if len(text) < 300:
+            # Check for error indicators in short content
+            error_phrases = [
+                '404',
+                'لم يتم العثور',
+                'لم يتم عثور',
+                'الصفحة غير موجودة',
+                'صفحة غير موجودة',
+                'page not found',
+                'not found',
+            ]
+            text_lower = text.lower()
+            for phrase in error_phrases:
+                if phrase in text_lower:
+                    return True
+        return False
 
     def get_stats(self) -> dict:
         """Get cleaning statistics."""
