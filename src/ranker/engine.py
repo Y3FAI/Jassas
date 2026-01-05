@@ -11,6 +11,7 @@ from typing import List, Dict
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 from usearch.index import Index
+from fastembed import TextEmbedding
 
 from db import Documents, Vocab
 from db.connection import get_db
@@ -36,7 +37,7 @@ class Ranker:
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-        self.vector_engine = None
+        self.vector_model = None
         self.vector_index = None
         self.parser = Parser()
         self.tokenizer = BM25Tokenizer()
@@ -66,23 +67,23 @@ class Ranker:
 
     def _load_vector_engine(self):
         """Lazy load vector model and index."""
-        if self.vector_engine is None:
-            self._log("Loading jassas-embedding model...")
-            self.vector_engine = VectorEngine()
-            self.vector_engine.load_model()
+        if self.vector_model is None:
+            self._log("Loading E5 multilingual model...")
+            self.vector_model = TextEmbedding(VectorEngine.MODEL_NAME)
 
         if self.vector_index is None and os.path.exists(INDEX_PATH):
             self._log("Loading vector index...")
             self.vector_index = Index.restore(INDEX_PATH, view=True)
 
-    def search(self, query: str, k: int = 10, debug: bool = False) -> List[dict]:
+    def search(self, query: str, k: int = 10, debug: bool = False, mode: str = "hybrid") -> List[dict]:
         """
-        Execute hybrid search (BM25 + Vector) and merge via RRF.
+        Execute search with configurable mode.
 
         Args:
             query: Search query
             k: Number of results to return
             debug: Print timing breakdown
+            mode: "hybrid" (default), "vector", or "bm25"
 
         Returns:
             List of result dicts with score, title, url
@@ -95,46 +96,61 @@ class Ranker:
         normalized_query = self.parser._normalize(query)
         timings['normalize'] = (time.perf_counter() - start) * 1000
 
-        # 1. Execute both searches in parallel
+        bm25_results = []
+        vector_results = []
+
+        # Execute searches based on mode
         start = time.perf_counter()
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            # BM25 is I/O bound (SQLite)
-            future_bm25 = executor.submit(self._bm25_search, normalized_query, 50)
-            # Vector is CPU bound (matrix math)
-            future_vector = executor.submit(self._vector_search, query, 50)
 
-            bm25_results = future_bm25.result()
-            vector_results = future_vector.result()
-        timings['search_parallel'] = (time.perf_counter() - start) * 1000
+        if mode == "hybrid":
+            # Both searches in parallel
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                future_bm25 = executor.submit(self._bm25_search, normalized_query, 50)
+                future_vector = executor.submit(self._vector_search, query, 50)
+                bm25_results = future_bm25.result()
+                vector_results = future_vector.result()
+        elif mode == "vector":
+            # Vector only
+            vector_results = self._vector_search(query, k * 2)
+        elif mode == "bm25":
+            # BM25 only
+            bm25_results = self._bm25_search(normalized_query, k * 2)
 
-        # 2. RRF Merge
+        timings['search'] = (time.perf_counter() - start) * 1000
+
+        # Merge/score results
         merged_scores: Dict[int, float] = {}
 
-        # Add BM25 RRF scores
-        for rank, doc_id in enumerate(bm25_results):
-            if doc_id not in merged_scores:
-                merged_scores[doc_id] = 0.0
-            merged_scores[doc_id] += 1.0 / (self.RRF_K + rank + 1)
+        if mode == "hybrid":
+            # RRF merge for hybrid
+            for rank, doc_id in enumerate(bm25_results):
+                if doc_id not in merged_scores:
+                    merged_scores[doc_id] = 0.0
+                merged_scores[doc_id] += 1.0 / (self.RRF_K + rank + 1)
 
-        # Add Vector RRF scores
-        for rank, doc_id in enumerate(vector_results):
-            if doc_id not in merged_scores:
-                merged_scores[doc_id] = 0.0
-            merged_scores[doc_id] += 1.0 / (self.RRF_K + rank + 1)
+            for rank, doc_id in enumerate(vector_results):
+                if doc_id not in merged_scores:
+                    merged_scores[doc_id] = 0.0
+                merged_scores[doc_id] += 1.0 / (self.RRF_K + rank + 1)
+        else:
+            # Single mode - use rank as score
+            results_list = vector_results if mode == "vector" else bm25_results
+            for rank, doc_id in enumerate(results_list):
+                merged_scores[doc_id] = 1.0 / (rank + 1)  # Simple rank score
 
-        # 3. Sort by merged score
+        # Sort by score
         start = time.perf_counter()
         top_doc_ids = sorted(merged_scores, key=merged_scores.get, reverse=True)[:k]
         timings['sort'] = (time.perf_counter() - start) * 1000
 
-        # 4. Fetch full results
+        # Fetch full results
         start = time.perf_counter()
         results = self._fetch_results(top_doc_ids, merged_scores)
         timings['fetch'] = (time.perf_counter() - start) * 1000
 
         if debug or self.verbose:
             total = sum(timings.values())
-            print(f"[Ranker] normalize={timings['normalize']:.1f}ms, search={timings['search_parallel']:.1f}ms, sort={timings['sort']:.1f}ms, fetch={timings['fetch']:.1f}ms, total={total:.1f}ms")
+            print(f"[Ranker:{mode}] normalize={timings['normalize']:.1f}ms, search={timings['search']:.1f}ms, sort={timings['sort']:.1f}ms, fetch={timings['fetch']:.1f}ms, total={total:.1f}ms")
 
         return results
 
@@ -173,22 +189,23 @@ class Ranker:
         return [doc_id for doc_id, score in results]
 
     def _vector_search(self, query: str, limit: int = 50) -> List[int]:
-        """Semantic search via USearch using jassas-embedding."""
+        """Semantic search via USearch using E5 multilingual."""
         import time
 
         start = time.perf_counter()
         self._load_vector_engine()
         load_time = (time.perf_counter() - start) * 1000
 
-        if self.vector_index is None or self.vector_engine is None:
+        if self.vector_index is None or self.vector_model is None:
             return []
 
         if len(self.vector_index) == 0:
             return []
 
-        # Encode query using jassas-embedding
+        # Encode query with E5 "query: " prefix
         start = time.perf_counter()
-        embedding = self.vector_engine.encode([query])[0].astype(np.float16)
+        query_with_prefix = f"query: {query}"
+        embedding = list(self.vector_model.embed([query_with_prefix]))[0].astype(np.float16)
         encode_time = (time.perf_counter() - start) * 1000
 
         # Search

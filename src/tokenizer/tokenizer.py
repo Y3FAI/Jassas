@@ -21,9 +21,10 @@ console = Console()
 class Tokenizer:
     """Builds BM25 inverted index and vector embeddings."""
 
-    def __init__(self, batch_size: int = 32, verbose: bool = True):
+    def __init__(self, batch_size: int = 32, verbose: bool = True, save_every: int = 5):
         self.batch_size = batch_size
         self.verbose = verbose
+        self.save_every = save_every  # Save index every N batches
 
         self.bm25 = BM25Tokenizer()
         self.vector = VectorEngine(batch_size=batch_size)
@@ -32,6 +33,7 @@ class Tokenizer:
         self.docs_processed = 0
         self.tokens_added = 0
         self.vectors_added = 0
+        self.batches_processed = 0
 
     def log(self, message: str, style: str = ""):
         """Print if verbose mode."""
@@ -69,8 +71,14 @@ class Tokenizer:
 
             self.log(f"[cyan]Processing batch of {len(batch)} documents...[/cyan]")
             self._process_batch(batch)
+            self.batches_processed += 1
 
-        # Save vector index
+            # Save incrementally every N batches (allows searching while tokenizing)
+            if self.batches_processed % self.save_every == 0:
+                self.log(f"[dim]Saving checkpoint ({self.vector.get_count()} vectors)...[/dim]")
+                self.vector.save_index()
+
+        # Final save
         self.log("\n[cyan]Saving vector index...[/cyan]")
         self.vector.save_index()
         self.log(f"[green]Saved {self.vector.get_count()} vectors[/green]")
@@ -95,11 +103,11 @@ class Tokenizer:
             term_freqs = self.bm25.get_term_frequencies(text)
             self._add_to_index(doc_id, term_freqs)
 
-            # 2. Prepare for vector embedding (title + description + text)
+            # 2. Prepare for vector embedding (title + description only)
             doc_ids.append(doc_id)
             description = doc.get('description', '')
-            # Use title + description + text for embedding
-            embed_text = f"{title}. {description}. {text[:800]}"
+            # E5 works best with concise text - title + description
+            embed_text = f"{title}. {description}" if description else title
             texts.append(embed_text)
 
             self.docs_processed += 1

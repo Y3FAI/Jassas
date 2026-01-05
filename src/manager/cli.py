@@ -253,7 +253,6 @@ def tokenize(
     console.print("[dim]This will continue from where it left off.[/dim]\n")
 
     # Run tokenization (incremental - only processes pending docs)
-    console.print("[cyan]Step 1/2: Tokenizing documents...[/cyan]")
     from tokenizer import start as tokenize_start
     try:
         tokenize_start(batch_size=batch_size, verbose=True)
@@ -261,16 +260,31 @@ def tokenize(
         console.print(f"[red]Error during tokenization: {e}[/red]")
         raise typer.Exit(1)
 
-    # Rebuild BM25 index (must be rebuilt to include new docs)
-    console.print("\n[cyan]Step 2/2: Rebuilding BM25 matrix...[/cyan]")
+    console.print("\n[bold green]Tokenization complete![/bold green]")
+    console.print("[dim]Run 'jassas bm25' to rebuild the BM25 matrix for search.[/dim]")
+
+
+@app.command()
+def bm25():
+    """Rebuild BM25 sparse matrix from inverted index (fast, ~1 second)."""
+    if not db_exists():
+        console.print("[red]Database not found. Run 'jassas init' first.[/red]")
+        raise typer.Exit(1)
+
+    # Check if there are tokenized documents
+    tokenized = Documents.get_tokenized_count()
+    if tokenized == 0:
+        console.print("[yellow]No tokenized documents. Run 'jassas tokenize' first.[/yellow]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[cyan]Building BM25 matrix for {tokenized} documents...[/cyan]\n")
+
     from scripts.build_index import build_index as build_bm25_index
     try:
         build_bm25_index()
     except Exception as e:
         console.print(f"[red]Error building BM25 index: {e}[/red]")
         raise typer.Exit(1)
-
-    console.print("\n[bold green]Tokenization complete! New documents are now searchable.[/bold green]")
 
 
 @app.command()
@@ -356,6 +370,8 @@ def build(
 def search(
     query: str = typer.Argument(..., help="Search query"),
     limit: int = typer.Option(10, "--limit", "-n", help="Number of results"),
+    vector_only: bool = typer.Option(False, "--vector-only", "-v", help="Use vector search only (no BM25)"),
+    bm25_only: bool = typer.Option(False, "--bm25-only", "-b", help="Use BM25 search only (no vector)"),
 ):
     """Search using hybrid RRF (NumPy BM25 + Vector Embeddings)."""
     if not db_exists():
@@ -368,19 +384,26 @@ def search(
         console.print("[yellow]No documents indexed. Run the pipeline first.[/yellow]")
         raise typer.Exit(1)
 
-    # Check if BM25 index exists
+    # Check if BM25 index exists (only if not vector-only)
     import os
     bm25_index_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'bm25_matrix.pkl')
-    if not os.path.exists(bm25_index_path):
-        console.print("[yellow]BM25 index not found. Run 'jassas build' first.[/yellow]")
+    if not vector_only and not os.path.exists(bm25_index_path):
+        console.print("[yellow]BM25 index not found. Run 'jassas bm25' first.[/yellow]")
         raise typer.Exit(1)
 
-    console.print(f"\n[cyan]Searching:[/cyan] {query}\n")
+    # Determine search mode
+    mode = "hybrid"
+    if vector_only:
+        mode = "vector"
+    elif bm25_only:
+        mode = "bm25"
+
+    console.print(f"\n[cyan]Searching ({mode}):[/cyan] {query}\n")
 
     # Initialize ranker and search
     from ranker import Ranker
     ranker = Ranker(verbose=True)
-    results = ranker.search(query, k=limit)
+    results = ranker.search(query, k=limit, mode=mode)
 
     if not results:
         console.print("[yellow]No results found.[/yellow]")
