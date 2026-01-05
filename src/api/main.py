@@ -4,6 +4,10 @@ Jassas Search API - FastAPI application.
 import sys
 import os
 import time
+
+# Use HuggingFace mirror if not set
+if "HF_ENDPOINT" not in os.environ:
+    os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 from contextlib import asynccontextmanager
 
 # Add src to path for imports
