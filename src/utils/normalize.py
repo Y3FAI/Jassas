@@ -64,6 +64,13 @@ def normalize_arabic(text: str) -> str:
     # Plus \u0670 (superscript alef)
     text = re.sub(r'[\u064B-\u065F\u0670]', '', text)
 
+    # Strip Arabic definite article (ال) BEFORE Alif normalization
+    # This prevents إلغاء from becoming الغاء then غاء
+    # Only strip from words > 4 chars to protect roots like الله, الا
+    words = text.split()
+    words = [re.sub(r'^ال', '', w) if w.startswith('ال') and len(w) > 4 else w for w in words]
+    text = ' '.join(words)
+
     # Unify Alif variants: أ إ آ → ا
     text = re.sub(r'[أإآ]', 'ا', text)
 
@@ -72,12 +79,6 @@ def normalize_arabic(text: str) -> str:
 
     # Unify Yeh: ى (alef maksura) → ي
     text = re.sub(r'ى', 'ي', text)
-
-    # Strip Arabic definite article (ال) with length guard
-    # Only strip from words > 4 chars to protect roots like الله, الا
-    words = text.split()
-    words = [re.sub(r'^ال', '', w) if w.startswith('ال') and len(w) > 4 else w for w in words]
-    text = ' '.join(words)
 
     # Collapse whitespace
     text = re.sub(r'\s+', ' ', text).strip()

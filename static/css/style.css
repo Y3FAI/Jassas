@@ -45,20 +45,14 @@ body:has(.home) {
 
 .search-box {
     width: 100%;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(16px);
     border-radius: 3rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 2px rgba(255, 255, 255, 0.05);
     padding: 1rem 1.75rem;
     display: flex;
     align-items: center;
     gap: 0.875rem;
-    transition: all 0.3s ease;
-}
-
-.search-box:focus-within {
-    background: rgba(255, 255, 255, 0.05);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 2px rgba(255, 255, 255, 0.05);
     transform: translateY(-2px);
 }
 
