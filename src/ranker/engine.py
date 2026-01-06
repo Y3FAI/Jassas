@@ -16,6 +16,7 @@ from cleaner.parser import Parser
 from tokenizer.bm25 import BM25Tokenizer
 from tokenizer.vector import VectorEngine
 from ranker.bm25_numpy import NumPyBM25Engine
+from ranker.reranker import Reranker
 
 # Paths
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data')
@@ -46,6 +47,9 @@ class Ranker:
         if not self.bm25_engine.load():
             self._log("[yellow]BM25 matrix index not found. Run: python src/scripts/build_index.py[/yellow]")
 
+        # Reranker (jassas-embedding for stage 2)
+        self.reranker = Reranker()
+
         # Pre-load stats (for legacy compatibility)
         self.total_docs = 0
         self.avgdl = 0.0
@@ -65,7 +69,7 @@ class Ranker:
     def _load_vector_engine(self):
         """Lazy load vector model and index."""
         if self.vector_engine is None:
-            self._log("Loading jassas-embedding model...")
+            self._log("Loading E5-large model...")
             self.vector_engine = VectorEngine()
             self.vector_engine.load_model()
 
@@ -136,19 +140,27 @@ class Ranker:
             for rank, doc_id in enumerate(results_list):
                 merged_scores[doc_id] = 1.0 / (rank + 1)  # Simple rank score
 
-        # Sort by score
+        # Sort by score - get top 10 candidates for reranking
         start = time.perf_counter()
-        top_doc_ids = sorted(merged_scores, key=merged_scores.get, reverse=True)[:k]
+        candidate_ids = sorted(merged_scores, key=merged_scores.get, reverse=True)[:10]
         timings['sort'] = (time.perf_counter() - start) * 1000
 
-        # Fetch full results
+        # Fetch candidates
         start = time.perf_counter()
-        results = self._fetch_results(top_doc_ids, merged_scores)
+        candidates = self._fetch_results(candidate_ids, merged_scores)
         timings['fetch'] = (time.perf_counter() - start) * 1000
+
+        # Rerank with jassas-embedding (title only)
+        start = time.perf_counter()
+        if mode == "hybrid" and candidates:
+            results = self.reranker.rerank(query, candidates, k=k)
+        else:
+            results = candidates[:k]
+        timings['rerank'] = (time.perf_counter() - start) * 1000
 
         if debug or self.verbose:
             total = sum(timings.values())
-            print(f"[Ranker:{mode}] normalize={timings['normalize']:.1f}ms, search={timings['search']:.1f}ms, sort={timings['sort']:.1f}ms, fetch={timings['fetch']:.1f}ms, total={total:.1f}ms")
+            print(f"[Ranker:{mode}] normalize={timings['normalize']:.1f}ms, search={timings['search']:.1f}ms, sort={timings['sort']:.1f}ms, fetch={timings['fetch']:.1f}ms, rerank={timings['rerank']:.1f}ms, total={total:.1f}ms")
 
         return results
 
@@ -187,7 +199,7 @@ class Ranker:
         return [doc_id for doc_id, score in results]
 
     def _vector_search(self, query: str, limit: int = 50) -> List[int]:
-        """Semantic search via USearch using jassas-embedding."""
+        """Semantic search via USearch using E5-large."""
         import time
 
         start = time.perf_counter()
