@@ -24,7 +24,7 @@ class SiteParser:
             return {'title': '', 'description': '', 'clean_text': '', 'doc_len': 0}
 
         title = normalize_arabic(self._extract_title(soup))
-        description = self._extract_description(soup)
+        description = normalize_arabic(self._extract_description(soup))
         clean_text = normalize_arabic(self._extract_content(soup))
 
         return {

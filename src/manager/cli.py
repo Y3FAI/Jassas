@@ -354,8 +354,20 @@ def build(
         console.print(f"[red]Error during tokenization: {e}[/red]")
         raise typer.Exit(1)
 
-    # 3. Build BM25 index
-    console.print("\n[cyan]Step 3/3: Building BM25 matrix...[/cyan]")
+    # 3. Fix vocab.doc_count (recalculate from inverted_index to ensure accuracy)
+    console.print("\n[cyan]Step 3/4: Fixing vocab doc_count...[/cyan]")
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE vocab SET doc_count = (
+                SELECT COUNT(DISTINCT doc_id)
+                FROM inverted_index
+                WHERE vocab_id = vocab.id
+            )
+        """)
+        console.print("  [green]Recalculated doc_count from inverted_index[/green]")
+
+    # 4. Build BM25 index
+    console.print("\n[cyan]Step 4/4: Building BM25 matrix...[/cyan]")
     from scripts.build_index import build_index as build_bm25_index
     try:
         build_bm25_index()

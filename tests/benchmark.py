@@ -14,6 +14,7 @@ from rich import box
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from ranker.engine import Ranker
+from utils.normalize import normalize_arabic
 
 console = Console()
 
@@ -28,7 +29,7 @@ class ProfiledRanker(Ranker):
 
         # 1. Normalization
         t0 = time.perf_counter()
-        normalized_query = self.parser._normalize(query)
+        normalized_query = normalize_arabic(query)
         metrics['normalization'] = (time.perf_counter() - t0) * 1000
 
         # 2. BM25 Search (SQL)
@@ -38,7 +39,7 @@ class ProfiledRanker(Ranker):
 
         # 3. Vector Search (USearch)
         t0 = time.perf_counter()
-        vector_results = self._vector_search(query, limit=50)
+        vector_results = self._vector_search(normalized_query, limit=50)
         metrics['vector_search'] = (time.perf_counter() - t0) * 1000
 
         # 4. RRF Merge (CPU)

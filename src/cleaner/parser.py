@@ -51,7 +51,7 @@ class Parser:
 
         return {
             'title': clean_title,
-            'description': description,
+            'description': normalize_arabic(description),
             'clean_text': clean_text,
             'doc_len': len(clean_text.split())
         }

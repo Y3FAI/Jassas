@@ -103,12 +103,12 @@ class Ranker:
             # Both searches in parallel
             with ThreadPoolExecutor(max_workers=2) as executor:
                 future_bm25 = executor.submit(self._bm25_search, normalized_query, 50)
-                future_vector = executor.submit(self._vector_search, query, 50)
+                future_vector = executor.submit(self._vector_search, normalized_query, 50)
                 bm25_results = future_bm25.result()
                 vector_results = future_vector.result()
         elif mode == "vector":
             # Vector only
-            vector_results = self._vector_search(query, k * 2)
+            vector_results = self._vector_search(normalized_query, k * 2)
         elif mode == "bm25":
             # BM25 only
             bm25_results = self._bm25_search(normalized_query, k * 2)

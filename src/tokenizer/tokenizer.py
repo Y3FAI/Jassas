@@ -88,17 +88,18 @@ class Tokenizer:
 
         for doc in batch:
             doc_id = doc['id']
-            text = doc['clean_text']
-            title = doc['title']
+            title = doc['title'] or ''
+            description = doc.get('description') or ''
+            text = doc['clean_text'] or ''
 
-            # 1. BM25: Build inverted index
-            term_freqs = self.bm25.get_term_frequencies(text)
+            # 1. BM25: Build inverted index (title + description + body)
+            full_text = f"{title} {description} {text}"
+            term_freqs = self.bm25.get_term_frequencies(full_text)
             self._add_to_index(doc_id, term_freqs)
 
-            # 2. Prepare for vector embedding (title + text snippet)
+            # 2. Prepare for vector embedding (title + description + text snippet)
             doc_ids.append(doc_id)
-            # Use title + first part of text for embedding
-            embed_text = f"{title} {text[:1000]}"
+            embed_text = f"{title} {description} {text[:1000]}"
             texts.append(embed_text)
 
             self.docs_processed += 1
