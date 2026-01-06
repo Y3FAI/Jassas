@@ -66,13 +66,8 @@ class ProfiledRanker(Ranker):
         candidates = self._fetch_results(candidate_ids, merged_scores)
         metrics['result_fetch'] = (time.perf_counter() - t0) * 1000
 
-        # 6. Rerank (jassas-embedding)
-        t0 = time.perf_counter()
-        results = self.reranker.rerank(query, candidates, k=k)
-        metrics['rerank'] = (time.perf_counter() - t0) * 1000
-
         metrics['total'] = sum(metrics.values())
-        return results, metrics
+        return candidates, metrics
 
 
 def run_benchmarks():
@@ -87,11 +82,7 @@ def run_benchmarks():
     t_e5 = (time.perf_counter() - t_start)
     console.print(f"   E5-large Load Time: [bold red]{t_e5:.2f}s[/bold red]")
 
-    t_start = time.perf_counter()
-    ranker.reranker.load()
-    t_reranker = (time.perf_counter() - t_start)
-    console.print(f"   Reranker Load Time: [bold red]{t_reranker:.2f}s[/bold red]")
-    console.print(f"   Total Load Time: [bold red]{t_e5 + t_reranker:.2f}s[/bold red]\n")
+    console.print(f"   Total Load Time: [bold red]{t_e5:.2f}s[/bold red]\n")
 
     # --- Test 2: Latency Breakdown ---
     queries = [
@@ -111,7 +102,6 @@ def run_benchmarks():
     table.add_column("Vector", justify="right")
     table.add_column("RRF", justify="right", style="dim")
     table.add_column("Fetch", justify="right")
-    table.add_column("Rerank", justify="right", style="yellow")
     table.add_column("Total", justify="right", style="bold green")
 
     all_metrics = []
@@ -127,7 +117,6 @@ def run_benchmarks():
             f"{metrics['vector_search']:.2f}",
             f"{metrics['rrf_merge']:.2f}",
             f"{metrics['result_fetch']:.2f}",
-            f"{metrics['rerank']:.2f}",
             f"{metrics['total']:.2f}"
         )
 
@@ -140,7 +129,7 @@ def run_benchmarks():
     avg_table.add_column("Avg (ms)", justify="right")
     avg_table.add_column("% of Total", justify="right")
 
-    components = ['normalization', 'bm25_search', 'vector_search', 'rrf_merge', 'result_fetch', 'rerank']
+    components = ['normalization', 'bm25_search', 'vector_search', 'rrf_merge', 'result_fetch']
     avg_total = statistics.mean([m['total'] for m in all_metrics])
 
     for comp in components:

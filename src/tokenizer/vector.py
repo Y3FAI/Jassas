@@ -1,6 +1,6 @@
 """
 Vector Engine - Generates embeddings and manages USearch index.
-Uses FastEmbed (ONNX) with intfloat/multilingual-e5-large.
+Uses FastEmbed (ONNX) with multilingual-e5-large.
 """
 import os
 from typing import List, Tuple
@@ -59,24 +59,15 @@ class VectorEngine:
             self.index.save(INDEX_PATH)
 
     def encode(self, texts: List[str]) -> np.ndarray:
-        """Generate embeddings for texts (for queries - adds 'query:' prefix)."""
+        """Generate embeddings for texts."""
         self.load_model()
-        # E5 models need "query: " prefix for queries
-        prefixed = [f"query: {t}" for t in texts]
-        embeddings = list(self.model.embed(prefixed))
-        return np.array(embeddings)
-
-    def encode_passages(self, texts: List[str]) -> np.ndarray:
-        """Generate embeddings for passages/documents (adds 'passage:' prefix)."""
-        self.load_model()
-        # E5 models need "passage: " prefix for documents
-        prefixed = [f"passage: {t}" for t in texts]
-        embeddings = list(self.model.embed(prefixed))
+        # FastEmbed handles E5 prefixes internally for supported models
+        embeddings = list(self.model.embed(texts))
         return np.array(embeddings)
 
     def encode_batch(self, texts: List[str]) -> np.ndarray:
-        """Generate embeddings in batches (for documents)."""
-        return self.encode_passages(texts)
+        """Generate embeddings in batches."""
+        return self.encode(texts)
 
     def add_documents(self, doc_ids: List[int], texts: List[str]):
         """
@@ -89,8 +80,8 @@ class VectorEngine:
         if not texts:
             return
 
-        # Generate embeddings (with passage: prefix)
-        embeddings = self.encode_passages(texts)
+        # Generate embeddings
+        embeddings = self.encode_batch(texts)
 
         # Add to index
         if self.index is None:
@@ -116,7 +107,7 @@ class VectorEngine:
         if self.index is None or len(self.index) == 0:
             return []
 
-        # Encode query (with query: prefix)
+        # Encode query
         query_embedding = self.encode([query])[0].astype(np.float16)
 
         # Search
