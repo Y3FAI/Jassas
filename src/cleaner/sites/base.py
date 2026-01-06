@@ -13,23 +13,31 @@ class SiteParser:
         Parse HTML and return structured content.
 
         Returns:
-            dict with: title, description, clean_text, doc_len
+            dict with: title, title_display, description, description_display, clean_text, doc_len
         """
         if not html or not html.strip():
-            return {'title': '', 'description': '', 'clean_text': '', 'doc_len': 0}
+            return {'title': '', 'title_display': '', 'description': '', 'description_display': '', 'clean_text': '', 'doc_len': 0}
 
         try:
             soup = BeautifulSoup(html, 'lxml')
         except Exception:
-            return {'title': '', 'description': '', 'clean_text': '', 'doc_len': 0}
+            return {'title': '', 'title_display': '', 'description': '', 'description_display': '', 'clean_text': '', 'doc_len': 0}
 
-        title = normalize_arabic(self._extract_title(soup))
-        description = normalize_arabic(self._extract_description(soup))
-        clean_text = normalize_arabic(self._extract_content(soup))
+        # Extract original text for display
+        title_display = self._extract_title(soup)
+        description_display = self._extract_description(soup)
+        content = self._extract_content(soup)
+
+        # Normalize for search
+        title = normalize_arabic(title_display)
+        description = normalize_arabic(description_display)
+        clean_text = normalize_arabic(content)
 
         return {
             'title': title,
+            'title_display': title_display,
             'description': description,
+            'description_display': description_display,
             'clean_text': clean_text,
             'doc_len': len(clean_text.split())
         }

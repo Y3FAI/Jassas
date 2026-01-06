@@ -135,10 +135,13 @@ WORDS: {result['doc_len']}
                 title=result['title'],
                 clean_text=result['clean_text'],
                 doc_len=result['doc_len'],
-                description=result.get('description', '')
+                description=result.get('description', ''),
+                title_display=result.get('title_display', ''),
+                description_display=result.get('description_display', '')
             )
             self.cleaned += 1
-            self.log(f"  [green]Cleaned[/green]: {result['title'][:50]}... ({result['doc_len']} words)")
+            display_title = result.get('title_display') or result['title']
+            self.log(f"  [green]Cleaned[/green]: {display_title[:50]}... ({result['doc_len']} words)")
         except Exception as e:
             self.log(f"  [red]Save error ({url}): {e}[/red]")
             self.failed += 1

@@ -70,15 +70,6 @@ class CachedStaticFiles(StaticFiles):
         return response
 
 
-def generate_snippet(text: str, length: int = 200) -> str:
-    """Generate snippet from text content."""
-    if not text:
-        return ""
-    if len(text) <= length:
-        return text
-    return text[:length] + "..."
-
-
 def execute_search(request: Request, query: str, limit: int) -> SearchResponse:
     """Core search logic shared by GET and POST endpoints."""
     start_time = time.perf_counter()
@@ -92,11 +83,15 @@ def execute_search(request: Request, query: str, limit: int) -> SearchResponse:
 
         formatted_results = []
         for res in raw_results:
+            description = res.get("description") or ""
+            if not description:
+                clean_text = res.get("clean_text") or ""
+                description = clean_text[:200] + "..." if len(clean_text) > 200 else clean_text
             formatted_results.append(
                 SearchResult(
                     title=res.get("title") or "No Title",
                     url=res.get("url") or "",
-                    snippet=generate_snippet(res.get("clean_text", "")),
+                    snippet=description,
                     score=round(res.get("score", 0.0), 4)
                 )
             )

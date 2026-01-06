@@ -57,13 +57,17 @@ def init_db():
     # ========== CLEANER LAYER ==========
 
     # documents - cleaned text with metadata
+    # title/description/clean_text = normalized for search
+    # title_display/description_display = original for display
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS documents (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         raw_page_id     INTEGER NOT NULL,
         url             TEXT NOT NULL,
         title           TEXT,
+        title_display   TEXT,
         description     TEXT,
+        description_display TEXT,
         clean_text      TEXT,
         doc_len         INTEGER DEFAULT 0,
         status          TEXT DEFAULT 'pending',

@@ -1,63 +1,103 @@
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>جساس - نتائج البحث</title>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>جساس - نتائج البحث</title>
 
-    <!-- SEO -->
-    <meta name="description" content="نتائج البحث - جساس محرك بحث للخدمات الحكومية السعودية">
-    <meta name="robots" content="noindex, follow">
+        <!-- SEO -->
+        <meta
+            name="description"
+            content="نتائج البحث - جساس محرك بحث للخدمات الحكومية السعودية"
+        />
+        <meta name="robots" content="noindex, follow" />
 
-    <!-- Open Graph -->
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="جساس - نتائج البحث">
-    <meta property="og:description" content="محرك بحث سريع للخدمات الحكومية السعودية">
-    <meta property="og:locale" content="ar_SA">
+        <!-- Open Graph -->
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="جساس - نتائج البحث" />
+        <meta
+            property="og:description"
+            content="محرك بحث سريع للخدمات الحكومية السعودية"
+        />
+        <meta property="og:locale" content="ar_SA" />
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+        <!-- Favicon -->
+        <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg" />
 
-    <!-- IBM Plex Sans Arabic -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+        <!-- IBM Plex Sans Arabic -->
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            rel="preload"
+            as="style"
+            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"
+        />
+        <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"
+            media="print"
+            onload="this.media='all'"
+        />
 
-    <!-- Styles -->
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="search-page">
-        <!-- Header with search bar -->
-        <header class="search-header">
-            <a href="/" class="header-logo">جساس</a>
-            <form id="search-form" class="header-search-form">
-                <div class="search-box search-box-small">
-                    <input
-                        type="text"
-                        name="q"
-                        id="search-input"
-                        class="search-input"
-                        placeholder="عن ماذا تبحث؟"
-                        autocomplete="off"
-                    >
-                    <button type="submit" class="search-button" aria-label="بحث">
-                        <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </button>
+        <!-- Styles -->
+        <link rel="stylesheet" href="/static/css/style.css" />
+    </head>
+    <body>
+        <div class="search-page">
+            <!-- Header with search bar -->
+            <header class="search-header">
+                <div>
+                    <a href="/" class="header-logo">جساس</a>
+                    <form id="search-form" class="header-search-form">
+                        <div class="search-box search-box-small">
+                            <input
+                                type="text"
+                                name="q"
+                                id="search-input"
+                                class="search-input"
+                                placeholder="عن ماذا تبحث؟"
+                                autocomplete="off"
+                            />
+                            <button
+                                type="submit"
+                                class="search-button"
+                                aria-label="بحث"
+                            >
+                                <svg
+                                    class="search-icon"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                    />
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
                 </div>
-            </form>
-        </header>
+            </header>
 
-        <!-- Results section -->
-        <main class="results-section">
-            <div id="results-stats" class="results-stats"></div>
-            <div id="results-container"></div>
-        </main>
-    </div>
+            <!-- Results section -->
+            <main class="results-section">
+                <div id="results-stats" class="results-stats"></div>
+                <div id="results-container"></div>
+            </main>
 
-    <script src="/static/js/search.js"></script>
-</body>
+            <footer class="footer">
+                <a
+                    href="https://github.com/y3fai"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >© 2026 Y3F</a
+                >
+            </footer>
+        </div>
+
+        <script src="/static/js/search.js"></script>
+    </body>
 </html>

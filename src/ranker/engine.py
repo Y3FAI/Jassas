@@ -224,7 +224,8 @@ class Ranker:
                 results.append({
                     'doc_id': doc_id,
                     'score': scores[doc_id],
-                    'title': doc['title'],
+                    'title': doc.get('title_display') or doc['title'],
+                    'description': doc.get('description_display') or doc.get('description', ''),
                     'url': doc['url'],
                     'clean_text': doc.get('clean_text', ''),
                 })

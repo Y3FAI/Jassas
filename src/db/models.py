@@ -158,13 +158,14 @@ class Documents:
     """Cleaned document operations for Cleaner/Tokenizer."""
 
     @staticmethod
-    def create(raw_page_id: int, url: str, title: str, clean_text: str, doc_len: int, description: str = None) -> int:
+    def create(raw_page_id: int, url: str, title: str, clean_text: str, doc_len: int,
+               description: str = None, title_display: str = None, description_display: str = None) -> int:
         """Create cleaned document. Returns document ID."""
         with get_db() as conn:
             cursor = conn.execute(
-                """INSERT INTO documents (raw_page_id, url, title, description, clean_text, doc_len)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (raw_page_id, url, title, description, clean_text, doc_len)
+                """INSERT INTO documents (raw_page_id, url, title, title_display, description, description_display, clean_text, doc_len)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (raw_page_id, url, title, title_display, description, description_display, clean_text, doc_len)
             )
             return cursor.lastrowid
 

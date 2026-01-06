@@ -49,13 +49,14 @@ function renderResults(data) {
 
     // Render each result
     data.results.forEach(result => {
-        const card = document.createElement('article');
+        const domain = new URL(result.url).hostname.replace('www.', '');
+        const card = document.createElement('a');
         card.className = 'result-card';
+        card.href = result.url;
+        card.target = '_blank';
         card.innerHTML = `
-            <a href="${escapeHtml(result.url)}" class="result-url" target="_blank">${escapeHtml(result.url)}</a>
-            <h3 class="result-title">
-                <a href="${escapeHtml(result.url)}" target="_blank">${escapeHtml(result.title)}</a>
-            </h3>
+            <span class="result-domain">${escapeHtml(domain)}</span>
+            <h3 class="result-title">${escapeHtml(result.title)}</h3>
             <p class="result-snippet">${escapeHtml(result.snippet)}</p>
         `;
         resultsContainer.appendChild(card);
