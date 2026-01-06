@@ -11,10 +11,8 @@ from typing import List, Dict
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 from usearch.index import Index
-from fastembed import TextEmbedding
 
 from db import Documents, Vocab
-from db.connection import get_db
 from cleaner.parser import Parser
 from tokenizer.bm25 import BM25Tokenizer
 from tokenizer.vector import VectorEngine
@@ -37,7 +35,7 @@ class Ranker:
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-        self.vector_model = None
+        self.vector_engine = None
         self.vector_index = None
         self.parser = Parser()
         self.tokenizer = BM25Tokenizer()
@@ -67,9 +65,10 @@ class Ranker:
 
     def _load_vector_engine(self):
         """Lazy load vector model and index."""
-        if self.vector_model is None:
-            self._log("Loading E5 multilingual model...")
-            self.vector_model = TextEmbedding(VectorEngine.MODEL_NAME)
+        if self.vector_engine is None:
+            self._log("Loading jassas-embedding model...")
+            self.vector_engine = VectorEngine()
+            self.vector_engine.load_model()
 
         if self.vector_index is None and os.path.exists(INDEX_PATH):
             self._log("Loading vector index...")
@@ -189,23 +188,22 @@ class Ranker:
         return [doc_id for doc_id, score in results]
 
     def _vector_search(self, query: str, limit: int = 50) -> List[int]:
-        """Semantic search via USearch using E5 multilingual."""
+        """Semantic search via USearch using jassas-embedding."""
         import time
 
         start = time.perf_counter()
         self._load_vector_engine()
         load_time = (time.perf_counter() - start) * 1000
 
-        if self.vector_index is None or self.vector_model is None:
+        if self.vector_index is None or self.vector_engine is None:
             return []
 
         if len(self.vector_index) == 0:
             return []
 
-        # Encode query with E5 "query: " prefix
+        # Encode query (no prefix needed for jassas-embedding)
         start = time.perf_counter()
-        query_with_prefix = f"query: {query}"
-        embedding = list(self.vector_model.embed([query_with_prefix]))[0].astype(np.float16)
+        embedding = self.vector_engine.encode([query])[0].astype(np.float16)
         encode_time = (time.perf_counter() - start) * 1000
 
         # Search

@@ -8,6 +8,16 @@ data/
 .urls
 *.pkl  # BM25 matrix index (regenerated from pipeline)
 
+# Model files 
+models/
+*.onnx
+*.bin
+*.safetensors
+*.pt
+*.pth
+**/tokenizer.json
+**/config.json
+
 # Python
 __pycache__/
 *.py[cod]
