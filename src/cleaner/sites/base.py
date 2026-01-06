@@ -2,6 +2,7 @@
 Base site parser.
 """
 from bs4 import BeautifulSoup
+from utils.normalize import normalize_arabic
 
 
 class SiteParser:
@@ -22,9 +23,9 @@ class SiteParser:
         except Exception:
             return {'title': '', 'description': '', 'clean_text': '', 'doc_len': 0}
 
-        title = self._extract_title(soup)
+        title = normalize_arabic(self._extract_title(soup))
         description = self._extract_description(soup)
-        clean_text = self._extract_content(soup)
+        clean_text = normalize_arabic(self._extract_content(soup))
 
         return {
             'title': title,

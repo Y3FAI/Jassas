@@ -2,8 +2,8 @@
 Parser - HTML to clean text with Arabic normalization.
 """
 import re
-import unicodedata
 from bs4 import BeautifulSoup
+from utils.normalize import normalize_arabic
 
 
 class Parser:
@@ -46,8 +46,8 @@ class Parser:
         text = soup.get_text(separator=' ')
 
         # Normalize
-        clean_text = self._normalize(text)
-        clean_title = self._normalize(title)
+        clean_text = normalize_arabic(text)
+        clean_title = normalize_arabic(title)
 
         return {
             'title': clean_title,
@@ -79,49 +79,3 @@ class Parser:
             return og_meta['content'].strip()
         return ""
 
-    def _normalize(self, text: str) -> str:
-        """
-        Normalize text with Arabic-specific rules.
-
-        Steps:
-        1. Unicode NFKC normalization
-        2. Remove Arabic diacritics (tashkeel)
-        3. Unify Alif variants (أ إ آ → ا)
-        4. Unify Teh Marbuta (ة → ه)
-        5. Unify Yeh (ى → ي)
-        6. Collapse whitespace
-        7. Lowercase (for English parts)
-        """
-        if not text:
-            return ""
-
-        # Unicode normalize
-        text = unicodedata.normalize('NFKC', text)
-
-        # Remove Arabic diacritics (tashkeel)
-        # Range: \u064B-\u065F (fatha, damma, kasra, shadda, sukun, etc.)
-        # Plus \u0670 (superscript alef)
-        text = re.sub(r'[\u064B-\u065F\u0670]', '', text)
-
-        # Unify Alif variants: أ إ آ → ا
-        text = re.sub(r'[أإآ]', 'ا', text)
-
-        # Unify Teh Marbuta: ة → ه
-        text = re.sub(r'ة', 'ه', text)
-
-        # Unify Yeh: ى (alef maksura) → ي
-        text = re.sub(r'ى', 'ي', text)
-
-        # Strip Arabic definite article (ال) with length guard
-        # Only strip from words > 4 chars to protect roots like الله, الا
-        # "السيبراني" (9 chars) → "سيبراني" (correct)
-        # "الله" (4 chars) → "الله" (protected)
-        words = text.split()
-        words = [re.sub(r'^ال', '', w) if w.startswith('ال') and len(w) > 4 else w for w in words]
-        text = ' '.join(words)
-
-        # Collapse whitespace
-        text = re.sub(r'\s+', ' ', text).strip()
-
-        # Lowercase for English parts
-        return text.lower()

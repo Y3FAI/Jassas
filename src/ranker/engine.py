@@ -12,7 +12,7 @@ import numpy as np
 from usearch.index import Index
 
 from db import Documents, Vocab
-from cleaner.parser import Parser
+from utils.normalize import normalize_arabic
 from tokenizer.bm25 import BM25Tokenizer
 from tokenizer.vector import VectorEngine
 from ranker.bm25_numpy import NumPyBM25Engine
@@ -36,7 +36,6 @@ class Ranker:
         self.verbose = verbose
         self.vector_engine = None
         self.vector_index = None
-        self.parser = Parser()
         self.tokenizer = BM25Tokenizer()
 
         # Initialize NumPy BM25 Engine (in-memory matrix)
@@ -65,7 +64,7 @@ class Ranker:
     def _load_vector_engine(self):
         """Lazy load vector model and index."""
         if self.vector_engine is None:
-            self._log("Loading jassas-embedding model...")
+            self._log("Loading model...")
             self.vector_engine = VectorEngine()
             self.vector_engine.load_model()
 
@@ -91,7 +90,7 @@ class Ranker:
 
         # Normalize query (same as indexing)
         start = time.perf_counter()
-        normalized_query = self.parser._normalize(query)
+        normalized_query = normalize_arabic(query)
         timings['normalize'] = (time.perf_counter() - start) * 1000
 
         bm25_results = []
