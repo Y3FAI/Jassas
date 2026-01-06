@@ -2,7 +2,6 @@
 Ranker Engine - Hybrid RRF Search (BM25 + Vector).
 The "Judge" that merges lexical and semantic results.
 """
-import math
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

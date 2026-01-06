@@ -1,39 +1,29 @@
 """
 Vector Engine - Generates embeddings and manages USearch index.
-Uses jassas-embedding (ONNX INT8) for fast Arabic semantic search.
+Uses FastEmbed (ONNX) with intfloat/multilingual-e5-large.
 """
 import os
 from typing import List, Tuple
 import numpy as np
+from fastembed import TextEmbedding
 from usearch.index import Index
-
-# PERFORMANCE FLAGS - Must be set before importing ONNX runtime
-os.environ["OMP_NUM_THREADS"] = "1"
-
-from transformers import AutoTokenizer
-from optimum.onnxruntime import ORTModelForFeatureExtraction
 
 
 # Paths
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data')
 INDEX_PATH = os.path.join(DATA_DIR, 'vectors.usearch')
-MODEL_PATH = 'y3fai/jassas-embedding'  # HuggingFace Hub (private)
 
 
 class VectorEngine:
-    """
-    Generates embeddings using jassas-embedding (ONNX INT8).
-    Manages USearch vector index for fast similarity search.
-    """
+    """Generates embeddings and manages vector index."""
 
-    # Model config
-    MODEL_NAME = MODEL_PATH
-    DIMENSIONS = 768
-    MAX_LENGTH = 512
+    # Model config - E5 large multilingual (best for Arabic)
+    MODEL_NAME = 'intfloat/multilingual-e5-large'
+    DIMENSIONS = 1024  # E5-large uses 1024 dims
 
     # USearch config
     INDEX_CONFIG = {
-        'ndim': 768,
+        'ndim': 1024,
         'metric': 'cos',
         'dtype': 'f16',           # Half precision (2x memory savings)
         'connectivity': 32,       # Balanced quality
@@ -41,43 +31,15 @@ class VectorEngine:
         'expansion_search': 100,  # Better recall
     }
 
-    # Singleton instances for model reuse
-    _tokenizer = None
-    _model = None
-
-    def __init__(self, batch_size: int = 32, model_path: str = None):
+    def __init__(self, batch_size: int = 32):
         self.batch_size = batch_size
-        self.model_path = model_path or MODEL_PATH
+        self.model = None
         self.index = None
 
-    @classmethod
-    def _load_model_singleton(cls, model_path: str):
-        """Load model as singleton for memory efficiency."""
-        if cls._tokenizer is None or cls._model is None:
-            print(f"Loading jassas-embedding: {model_path}")
-
-            # Get HF token from environment (for private models)
-            hf_token = os.environ.get('HF_TOKEN')
-
-            # Tokenizer
-            cls._tokenizer = AutoTokenizer.from_pretrained(
-                model_path,
-                clean_up_tokenization_spaces=True,
-                token=hf_token,
-            )
-
-            # ONNX Runtime model (INT8 quantized)
-            cls._model = ORTModelForFeatureExtraction.from_pretrained(
-                model_path,
-                file_name="model_quantized.onnx",
-                token=hf_token,
-            )
-
-        return cls._tokenizer, cls._model
-
     def load_model(self):
-        """Load the jassas-embedding model."""
-        self._load_model_singleton(self.model_path)
+        """Load the FastEmbed model."""
+        if self.model is None:
+            self.model = TextEmbedding(self.MODEL_NAME)
 
     def create_index(self):
         """Create a new USearch index."""
@@ -97,45 +59,24 @@ class VectorEngine:
             self.index.save(INDEX_PATH)
 
     def encode(self, texts: List[str]) -> np.ndarray:
-        """
-        Generate embeddings for texts using jassas-embedding.
+        """Generate embeddings for texts (for queries - adds 'query:' prefix)."""
+        self.load_model()
+        # E5 models need "query: " prefix for queries
+        prefixed = [f"query: {t}" for t in texts]
+        embeddings = list(self.model.embed(prefixed))
+        return np.array(embeddings)
 
-        No prefixes needed - model trained on raw Arabic text.
-        Uses mean pooling + L2 normalization.
-        """
-        tokenizer, model = self._load_model_singleton(self.model_path)
-
-        # Tokenize
-        inputs = tokenizer(
-            texts,
-            padding=True,
-            truncation=True,
-            max_length=self.MAX_LENGTH,
-            return_tensors="pt"
-        )
-
-        # Inference
-        outputs = model(**inputs)
-
-        # Mean pooling over sequence length
-        embeddings = outputs.last_hidden_state.mean(dim=1)
-
-        # L2 normalization (required for cosine similarity)
-        embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
-
-        return embeddings.detach().numpy()
+    def encode_passages(self, texts: List[str]) -> np.ndarray:
+        """Generate embeddings for passages/documents (adds 'passage:' prefix)."""
+        self.load_model()
+        # E5 models need "passage: " prefix for documents
+        prefixed = [f"passage: {t}" for t in texts]
+        embeddings = list(self.model.embed(prefixed))
+        return np.array(embeddings)
 
     def encode_batch(self, texts: List[str]) -> np.ndarray:
-        """Generate embeddings in batches for large document sets."""
-        self.load_model()
-
-        all_embeddings = []
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i:i + self.batch_size]
-            embeddings = self.encode(batch)
-            all_embeddings.append(embeddings)
-
-        return np.vstack(all_embeddings)
+        """Generate embeddings in batches (for documents)."""
+        return self.encode_passages(texts)
 
     def add_documents(self, doc_ids: List[int], texts: List[str]):
         """
@@ -148,8 +89,8 @@ class VectorEngine:
         if not texts:
             return
 
-        # Generate embeddings
-        embeddings = self.encode_batch(texts)
+        # Generate embeddings (with passage: prefix)
+        embeddings = self.encode_passages(texts)
 
         # Add to index
         if self.index is None:
@@ -175,7 +116,7 @@ class VectorEngine:
         if self.index is None or len(self.index) == 0:
             return []
 
-        # Encode query (no prefix needed)
+        # Encode query (with query: prefix)
         query_embedding = self.encode([query])[0].astype(np.float16)
 
         # Search
