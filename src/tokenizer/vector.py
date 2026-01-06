@@ -4,7 +4,7 @@ Vector Engine - Generates embeddings and manages USearch index.
 import os
 from typing import List, Tuple
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from usearch.index import Index
 
 
@@ -36,9 +36,9 @@ class VectorEngine:
         self.index = None
 
     def load_model(self):
-        """Load the sentence transformer model."""
+        """Load the fastembed model."""
         if self.model is None:
-            self.model = SentenceTransformer(self.MODEL_NAME)
+            self.model = TextEmbedding(self.MODEL_NAME)
 
     def create_index(self):
         """Create a new USearch index."""
@@ -60,7 +60,9 @@ class VectorEngine:
     def encode(self, texts: List[str]) -> np.ndarray:
         """Generate embeddings for texts."""
         self.load_model()
-        return self.model.encode(texts, show_progress_bar=False)
+        # FastEmbed returns a generator, convert to numpy array
+        embeddings = list(self.model.embed(texts))
+        return np.array(embeddings)
 
     def encode_batch(self, texts: List[str]) -> np.ndarray:
         """Generate embeddings in batches."""
@@ -69,8 +71,9 @@ class VectorEngine:
         all_embeddings = []
         for i in range(0, len(texts), self.batch_size):
             batch = texts[i:i + self.batch_size]
-            embeddings = self.model.encode(batch, show_progress_bar=False)
-            all_embeddings.append(embeddings)
+            # FastEmbed returns a generator, convert to list then array
+            embeddings = list(self.model.embed(batch))
+            all_embeddings.append(np.array(embeddings))
 
         return np.vstack(all_embeddings)
 

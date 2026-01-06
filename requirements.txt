@@ -4,9 +4,7 @@
 beautifulsoup4>=4.12.3
 lxml>=5.0.0
 
-# Embeddings (for vector search) - jassas-embedding ONNX INT8
-transformers>=4.36.0
-optimum[onnxruntime]>=1.16.0
+fastembed>=0.4.0
 
 # Vector Index (lightweight, fast)
 usearch>=2.9.0
